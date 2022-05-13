@@ -40,19 +40,18 @@ func (tx *Transaction) Hash() []byte {
 	return hash[:]
 }
 
-func NewTransaction(from, to string, amount int, bc *Blockchain) *Transaction {
+func NewTransaction(from, to string, amount int, UTXO *UTXOSet) *Transaction {
 	var inputs []TxInput
 	var outputs []TxOutput
 
 	wallets, err := wallet.CreateWallets()
-	if err != nil {
-		log.Panic(err)
-	}
+	Handle(err)
 	w := wallets.GetWallet(from)
 	pubKeyHash := wallet.PublicKeyToHash(w.PublicKey)
-	acc, validOutputs := bc.FindSpendableOutputs(pubKeyHash, amount)
+	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
+
 	if acc < amount {
-		log.Panic("ERROR: Not enough funds")
+		log.Panic("Error: not enough funds")
 	}
 
 	for txid, outs := range validOutputs {
@@ -60,37 +59,31 @@ func NewTransaction(from, to string, amount int, bc *Blockchain) *Transaction {
 		Handle(err)
 
 		for _, out := range outs {
-			input := TxInput{txID, out, nil, pubKeyHash}
+			input := TxInput{txID, out, nil, w.PublicKey}
 			inputs = append(inputs, input)
 		}
 	}
 
 	outputs = append(outputs, *NewTXOutput(amount, to))
+
 	if acc > amount {
-		outputs = append(outputs, TxOutput{acc - amount, pubKeyHash})
+		outputs = append(outputs, *NewTXOutput(acc-amount, from))
 	}
+
 	tx := Transaction{nil, inputs, outputs}
 	tx.ID = tx.Hash()
+	UTXO.Blockchain.SignTransaction(&tx, w.PrivateKey)
 
-	bc.SignTransaction(&tx, w.PrivateKey)
 	return &tx
-}
-
-// SetID sets the transaction ID
-func (tx *Transaction) SetID() {
-	var encoded bytes.Buffer
-	var hash [32]byte
-	encoder := gob.NewEncoder(&encoded)
-	err := encoder.Encode(tx)
-	Handle(err)
-	hash = sha256.Sum256(encoded.Bytes())
-	tx.ID = hash[:]
 }
 
 // CoinbaseTx creates a new coinbase transaction
 func CoinbaseTx(to, data string) *Transaction {
 	if data == "" {
-		data = fmt.Sprintf("Reward to %s", to)
+		randData := make([]byte, 20)
+		_, err := rand.Read(randData)
+		Handle(err)
+		data = fmt.Sprintf("%x", randData)
 	}
 	txIn := TxInput{
 		ID:        []byte{},
@@ -98,7 +91,7 @@ func CoinbaseTx(to, data string) *Transaction {
 		Signature: []byte(data),
 	}
 
-	txOut := NewTXOutput(100, to)
+	txOut := NewTXOutput(20, to)
 
 	tx := &Transaction{
 		ID:      nil,
@@ -106,7 +99,7 @@ func CoinbaseTx(to, data string) *Transaction {
 		Outputs: []TxOutput{*txOut},
 	}
 
-	tx.SetID()
+	tx.ID = tx.Hash()
 	return tx
 }
 
@@ -158,7 +151,7 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	curve := elliptic.P256()
 
 	for inID, in := range txCopy.Inputs {
-		prevTx := prevTXs[string(in.ID)]
+		prevTx := prevTXs[hex.EncodeToString(in.ID)]
 		txCopy.Inputs[inID].Signature = nil
 		txCopy.Inputs[inID].PublicKey = prevTx.Outputs[in.Out].PubKeyHash
 
@@ -211,17 +204,17 @@ func (tx Transaction) String() string {
 
 	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
 	for i, input := range tx.Inputs {
-		lines = append(lines, fmt.Sprintf("			Input %d:", i))
-		lines = append(lines, fmt.Sprintf("			TXID:     %x", input.ID))
-		lines = append(lines, fmt.Sprintf("     	Out:       %d", input.Out))
-		lines = append(lines, fmt.Sprintf("     	Signature: %x", input.Signature))
-		lines = append(lines, fmt.Sprintf("     	PubKey:    %x", input.PublicKey))
+		lines = append(lines, fmt.Sprintf("\tInput %d:", i))
+		lines = append(lines, fmt.Sprintf("\t\tTXID:     %x", input.ID))
+		lines = append(lines, fmt.Sprintf("\t\tOut:       %d", input.Out))
+		lines = append(lines, fmt.Sprintf("\t\tSignature: %x", input.Signature))
+		lines = append(lines, fmt.Sprintf("\t\tPubKey:    %x", input.PublicKey))
 	}
 
 	for i, output := range tx.Outputs {
-		lines = append(lines, fmt.Sprintf("			Output %d:", i))
-		lines = append(lines, fmt.Sprintf("			Value:  %d", output.Value))
-		lines = append(lines, fmt.Sprintf("			Script: %x", output.PubKeyHash))
+		lines = append(lines, fmt.Sprintf("\tOutput %d:", i))
+		lines = append(lines, fmt.Sprintf("	\tValue:  %d", output.Value))
+		lines = append(lines, fmt.Sprintf("	\tScript: %x", output.PubKeyHash))
 	}
 
 	return strings.Join(lines, "\n")

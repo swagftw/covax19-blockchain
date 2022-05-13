@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"bytes"
+	"encoding/gob"
 	"github.com/swagftw/covax19-blockchain/wallet"
 )
 
@@ -10,11 +11,31 @@ type TxOutput struct {
 	PubKeyHash []byte
 }
 
+type TxOutputs struct {
+	Outputs []TxOutput
+}
+
 type TxInput struct {
 	ID        []byte
 	Out       int
 	Signature []byte
 	PublicKey []byte
+}
+
+func (outs TxOutputs) Serialize() []byte {
+	var buff bytes.Buffer
+	enc := gob.NewEncoder(&buff)
+	err := enc.Encode(outs)
+	Handle(err)
+	return buff.Bytes()
+}
+
+func DeserializeOutputs(data []byte) TxOutputs {
+	var outputs TxOutputs
+	dec := gob.NewDecoder(bytes.NewReader(data))
+	err := dec.Decode(&outputs)
+	Handle(err)
+	return outputs
 }
 
 func NewTXOutput(value int, address string) *TxOutput {
