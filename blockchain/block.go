@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"time"
 )
 
 // Block represents each 'item' in the blockchain
 type Block struct {
+	Timestamp    int64
 	Transactions []*Transaction
 	PrevHash     []byte
 	Hash         []byte
 	Nonce        int
+	Height       int
 }
 
 // DeriveHash returns the hash of the block
@@ -24,12 +27,14 @@ func (b *Block) DeriveHash() {
 }
 
 // CreateBlock creates a new block
-func CreateBlock(transactions []*Transaction, prevHash []byte) *Block {
+func CreateBlock(transactions []*Transaction, prevHash []byte, height int) *Block {
 	block := &Block{
 		Transactions: transactions,
 		PrevHash:     prevHash,
 		Hash:         []byte{},
 		Nonce:        0,
+		Timestamp:    time.Now().Unix(),
+		Height:       height,
 	}
 	pow := NewProof(block)
 	nonce, hash := pow.Run()
@@ -42,28 +47,16 @@ func CreateBlock(transactions []*Transaction, prevHash []byte) *Block {
 // Genesis creates the first block in the blockchain
 // which is called as the 'genesis block'
 func Genesis(coinbase *Transaction) *Block {
-	block := &Block{
-		Transactions: []*Transaction{coinbase},
-		PrevHash:     []byte{},
-		Hash:         []byte{},
-		Nonce:        0,
-	}
-	pow := NewProof(block)
-	nonce, hash := pow.Run()
-	block.Hash = hash[:]
-	block.Nonce = nonce
-	return block
+	return CreateBlock([]*Transaction{coinbase}, []byte{}, 0)
 }
 
 func (b *Block) HashTransactions() []byte {
 	var txHashes [][]byte
-	var txHash [32]byte
 	for _, transaction := range b.Transactions {
-		txHashes = append(txHashes, transaction.Hash())
+		txHashes = append(txHashes, transaction.Serialize())
 	}
-
-	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
-	return txHash[:]
+	tree := NewMerkleTree(txHashes)
+	return tree.RootNode.Data
 }
 
 // Serialize serializes the block into a byte array
