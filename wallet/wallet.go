@@ -6,8 +6,9 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
-	"golang.org/x/crypto/ripemd160"
 	"log"
+
+	"golang.org/x/crypto/ripemd160"
 )
 
 const (
@@ -43,7 +44,7 @@ func NewKeyPair() (ecdsa.PrivateKey, []byte) {
 
 func MakeWallet() *Wallet {
 	private, public := NewKeyPair()
-	wallet := Wallet{private, public}
+	wallet := Wallet{PrivateKey: private, PublicKey: public}
 	return &wallet
 }
 
@@ -70,5 +71,6 @@ func ValidateAddress(address string) bool {
 	version := pubKeyHash[0]
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-checkSumLength]
 	targetChecksum := CheckSum(append([]byte{version}, pubKeyHash...))
-	return bytes.Compare(actualChecksum, targetChecksum) == 0
+
+	return bytes.Equal(actualChecksum, targetChecksum)
 }

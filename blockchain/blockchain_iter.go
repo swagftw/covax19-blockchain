@@ -1,6 +1,8 @@
 package blockchain
 
-import "github.com/dgraph-io/badger"
+import (
+	"github.com/dgraph-io/badger"
+)
 
 type Iterator struct {
 	CurrentHash []byte
@@ -19,11 +21,13 @@ func (iter *Iterator) Next() *Block {
 	err := iter.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(iter.CurrentHash)
 		Handle(err)
-		err = item.Value(func(val []byte) error {
+		_ = item.Value(func(val []byte) error {
 			block = Deserialize(val)
+
 			return nil
 		})
-		return err
+
+		return nil
 	})
 	Handle(err)
 

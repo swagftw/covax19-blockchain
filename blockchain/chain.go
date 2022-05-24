@@ -7,74 +7,82 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/dgraph-io/badger"
+	"github.com/swagftw/covax19-blockchain/wallet"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
+
+	"github.com/dgraph-io/badger"
+	errors2 "github.com/pkg/errors"
 )
 
 const (
-	DbPath      = "./tmp/blocks_%s"
+	DBPath      = "./tmp/blocks_%s"
 	GenesisData = "Data For Genesis Transaction data"
 )
 
-// Blockchain is a series of validated Blocks and is the actual blockchain that is stored
+var (
+	ErrBlockchainExists = errors.New("blockchain already exists")
+	ErrNoBlockchain     = errors.New("blockchain not found")
+)
+
+// Blockchain is a series of validated Blocks and is the actual blockchain that is stored.
 type Blockchain struct {
 	LastHash []byte
 	Database *badger.DB
 }
 
-// InitBlockchain creates the genesis block in the blockchain and creates the blockchain
-func InitBlockchain(address, nodeID string) *Blockchain {
-	path := fmt.Sprintf(DbPath, nodeID)
+// InitBlockchain creates the genesis block in the blockchain and creates the blockchain.
+func InitBlockchain(address, nodeID string) (*Blockchain, error) {
+	path := fmt.Sprintf(DBPath, nodeID)
 	if DBExists(path) {
-		fmt.Println("Blockchain already exists")
-		runtime.Goexit()
+		log.Println("blockchain exists")
+
+		return nil, ErrBlockchainExists
 	}
 
 	var lastHash []byte
 
-	if DBExists(path) {
-		fmt.Println("blockchain exists")
-		runtime.Goexit()
-	}
-
 	// Open the database
-	opts := badger.DefaultOptions(DbPath)
-	db, err := openDB(path, opts)
+	opts := badger.DefaultOptions(path)
+	bdDB, err := openDB(path, opts)
 	Handle(err)
 
 	// if the database is not present create genesis block and store it in the database
 	// else continue with the blockchain
-	err = db.Update(func(txn *badger.Txn) error {
+	err = bdDB.Update(func(txn *badger.Txn) error {
 		cbtx := CoinbaseTx(address, GenesisData)
 		genesis := Genesis(cbtx)
-		fmt.Println("Creating and storing genesis block")
+		log.Println("Creating and storing genesis block")
 		err = txn.Set(genesis.Hash, genesis.Serialize())
 		Handle(err)
 		err = txn.Set([]byte("lh"), genesis.Hash)
 
 		lastHash = genesis.Hash
-		return err
+
+		return errors2.Wrap(err, "error setting last hash")
 	})
 	Handle(err)
 
-	return &Blockchain{lastHash, db}
+	return &Blockchain{lastHash, bdDB}, nil
 }
 
-func ContinueBlockchain(nodeID string) *Blockchain {
-	path := fmt.Sprintf(DbPath, nodeID)
-	if DBExists(path) == false {
-		fmt.Println("No existing blockchain found")
-		runtime.Goexit()
+func ContinueBlockchain(nodeID, mainNodeID string) (*Blockchain, error) {
+	path := fmt.Sprintf(DBPath, nodeID)
+	if !DBExists(path) {
+		err := copyFromMainBlockchain(nodeID, mainNodeID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var lastHash []byte
 
 	// Open the database
-	opts := badger.DefaultOptions(DbPath)
+	opts := badger.DefaultOptions(path)
 	db, err := openDB(path, opts)
 	Handle(err)
 
@@ -83,48 +91,93 @@ func ContinueBlockchain(nodeID string) *Blockchain {
 		Handle(err)
 		err = item.Value(func(val []byte) error {
 			lastHash = val
+
 			return nil
 		})
-		return err
+
+		return errors2.Wrap(err, "error getting last hash")
 	})
+	Handle(err)
+
 	chain := &Blockchain{lastHash, db}
+
+	return chain, nil
+}
+
+func CreateMainBlockchain(mainNodeID string) *Blockchain {
+	wallets, _ := wallet.CreateWallets()
+	wlt := wallets.AddWallet()
+
+	wallets.SaveFile()
+
+	address := string(wlt.Address())
+
+	if !wallet.ValidateAddress(address) {
+		log.Panic("Address is not valid")
+	}
+
+	chain, _ := InitBlockchain(address, mainNodeID)
+	UTXOSet := UTXOSet{Blockchain: chain}
+
+	UTXOSet.Reindex()
+
 	return chain
 }
 
 // MineBlock adds a new block to the blockchain
 func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
 	var lastHash []byte
+
 	var lastHeight int
+
+	for _, tx := range transactions {
+		if !bc.VerifyTransaction(tx) {
+			log.Panic("Invalid Transaction")
+		}
+	}
 
 	err := bc.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte("lh"))
 		Handle(err)
 		err = item.Value(func(val []byte) error {
 			lastHash = val
+
 			return nil
 		})
+		if err != nil {
+			log.Panic(err)
+		}
 
 		item, err = txn.Get(lastHash)
 		Handle(err)
-		err = item.Value(func(val []byte) error {
-			block := Deserialize(val)
-			lastHeight = block.Height
+		var lastBlockData []byte
+		_ = item.Value(func(val []byte) error {
+			lastBlockData = val
+
 			return nil
 		})
-		return nil
-	})
-	Handle(err)
-	newBlock := CreateBlock(transactions, lastHash, lastHeight+1)
 
-	// save newly created block
-	err = bc.Database.Update(func(txn *badger.Txn) error {
-		err = txn.Set(newBlock.Hash, newBlock.Serialize())
-		Handle(err)
-		err = txn.Set([]byte("lh"), newBlock.Hash)
-		bc.LastHash = newBlock.Hash
+		lastBlock := Deserialize(lastBlockData)
+
+		lastHeight = lastBlock.Height
+
 		return err
 	})
 	Handle(err)
+
+	newBlock := CreateBlock(transactions, lastHash, lastHeight+1)
+
+	err = bc.Database.Update(func(txn *badger.Txn) error {
+		err := txn.Set(newBlock.Hash, newBlock.Serialize())
+		Handle(err)
+		err = txn.Set([]byte("lh"), newBlock.Hash)
+
+		bc.LastHash = newBlock.Hash
+
+		return err
+	})
+	Handle(err)
+
 	return newBlock
 }
 
@@ -141,6 +194,7 @@ func (bc *Blockchain) AddBlock(block *Block) {
 		var lastHash []byte
 		err = item.Value(func(val []byte) error {
 			lastHash = val
+
 			return nil
 		})
 		Handle(err)
@@ -153,6 +207,7 @@ func (bc *Blockchain) AddBlock(block *Block) {
 				Handle(err)
 				bc.LastHash = block.Hash
 			}
+
 			return err
 		})
 
@@ -163,28 +218,35 @@ func (bc *Blockchain) AddBlock(block *Block) {
 
 func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 	var block Block
+
 	err := bc.Database.View(func(txn *badger.Txn) error {
 		if item, err := txn.Get(blockHash); err != nil {
 			return errors.New("block not found")
 		} else {
 			err := item.Value(func(val []byte) error {
 				block = *Deserialize(val)
+
 				return nil
 			})
-			return err
+
+			return errors2.Wrap(err, "error getting block")
 		}
 	})
-	return block, err
+
+	return block, errors2.Wrap(err, "error getting block")
 }
 
 func (bc *Blockchain) GetBestHeight() int {
 	var lastBlock Block
+
 	var lastHash []byte
+
 	err := bc.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte("lh"))
 		Handle(err)
 		err = item.Value(func(val []byte) error {
 			lastHash = val
+
 			return nil
 		})
 		Handle(err)
@@ -192,11 +254,14 @@ func (bc *Blockchain) GetBestHeight() int {
 		Handle(err)
 		err = item.Value(func(val []byte) error {
 			lastBlock = *Deserialize(val)
+
 			return nil
 		})
-		return err
+
+		return errors2.Wrap(err, "error getting last hash")
 	})
 	Handle(err)
+
 	return lastBlock.Height
 }
 
@@ -204,13 +269,16 @@ func (bc *Blockchain) GetBlockHashes() [][]byte {
 	var blocks [][]byte
 
 	iter := bc.Iterator()
+
 	for {
 		block := iter.Next()
 		blocks = append(blocks, block.Hash)
+
 		if len(block.PrevHash) == 0 {
 			break
 		}
 	}
+
 	return blocks
 }
 
@@ -239,7 +307,7 @@ func (bc *Blockchain) FindUTXOs() map[string]TxOutputs {
 				outs.Outputs = append(outs.Outputs, out)
 				UTXO[txID] = outs
 			}
-			if tx.IsCoinbase() == false {
+			if !tx.IsCoinbase() {
 				for _, in := range tx.Inputs {
 					inTxID := hex.EncodeToString(in.ID)
 					spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Out)
@@ -251,6 +319,7 @@ func (bc *Blockchain) FindUTXOs() map[string]TxOutputs {
 			break
 		}
 	}
+
 	return UTXO
 }
 
@@ -290,11 +359,13 @@ func (bc *Blockchain) VerifyTransaction(tx *Transaction) bool {
 	if tx.IsCoinbase() {
 		return true
 	}
+
 	prevTXs := make(map[string]Transaction)
 
 	for _, in := range tx.Inputs {
 		prevTX, err := bc.FindTransaction(in.ID)
 		Handle(err)
+
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
 
@@ -340,4 +411,40 @@ func DBExists(path string) bool {
 		return false
 	}
 	return true
+}
+
+func copyFromMainBlockchain(node string, mainNodeID string) error {
+	mainNodeDBPath := fmt.Sprintf(DBPath, mainNodeID)
+	if !DBExists(mainNodeDBPath) {
+		log.Println("blockchain not found")
+
+		return ErrNoBlockchain
+	}
+
+	sourceDir, err := ioutil.ReadDir(mainNodeDBPath)
+	Handle(err)
+
+	destDirPath := fmt.Sprintf(DBPath, node)
+	err = os.Mkdir(destDirPath, 0755)
+	Handle(err)
+
+	for _, fileInfo := range sourceDir {
+		if fileInfo.Name() == "LOCK" {
+			continue
+		}
+		sourceFilePath := filepath.Join(mainNodeDBPath, fileInfo.Name())
+		destFilePath := filepath.Join(destDirPath, fileInfo.Name())
+		copyFile(sourceFilePath, destFilePath)
+	}
+	return nil
+}
+
+func copyFile(sourceFilePath, destFilePath string) {
+	file, err := os.Open(sourceFilePath)
+	Handle(err)
+	defer file.Close()
+	fileData, err := io.ReadAll(file)
+	Handle(err)
+	err = os.WriteFile(destFilePath, fileData, 0644)
+	Handle(err)
 }

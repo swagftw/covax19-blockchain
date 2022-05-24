@@ -8,18 +8,21 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/swagftw/covax19-blockchain/wallet"
 	"log"
 	"math/big"
 	"strings"
+	"time"
 )
 
 // Transaction represents a transaction
 type Transaction struct {
-	ID      []byte
-	Inputs  []TxInput
-	Outputs []TxOutput
+	ID       []byte
+	Inputs   []TxInput
+	Outputs  []TxOutput
+	LockTime int64
 }
 
 func (tx *Transaction) Serialize() []byte {
@@ -40,7 +43,7 @@ func (tx *Transaction) Hash() []byte {
 	return hash[:]
 }
 
-func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Transaction {
+func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) (*Transaction, error) {
 	var inputs []TxInput
 	var outputs []TxOutput
 
@@ -48,7 +51,8 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
 
 	if acc < amount {
-		log.Panic("Error: not enough funds")
+		log.Println("Not enough funds")
+		return nil, errors.New("not enough funds")
 	}
 
 	for txid, outs := range validOutputs {
@@ -61,7 +65,7 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 		}
 	}
 
-	from := fmt.Sprintf("%s", w.Address())
+	from := string(w.Address())
 
 	outputs = append(outputs, *NewTXOutput(amount, to))
 
@@ -69,11 +73,11 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) *Tra
 		outputs = append(outputs, *NewTXOutput(acc-amount, from))
 	}
 
-	tx := Transaction{nil, inputs, outputs}
+	tx := Transaction{Inputs: inputs, Outputs: outputs, LockTime: time.Now().Unix()}
 	tx.ID = tx.Hash()
 	UTXO.Blockchain.SignTransaction(&tx, w.PrivateKey)
 
-	return &tx
+	return &tx, nil
 }
 
 // CoinbaseTx creates a new coinbase transaction
@@ -93,9 +97,10 @@ func CoinbaseTx(to, data string) *Transaction {
 	txOut := NewTXOutput(20, to)
 
 	tx := &Transaction{
-		ID:      nil,
-		Inputs:  []TxInput{txIn},
-		Outputs: []TxOutput{*txOut},
+		ID:       nil,
+		Inputs:   []TxInput{txIn},
+		Outputs:  []TxOutput{*txOut},
+		LockTime: time.Now().Unix(),
 	}
 
 	tx.ID = tx.Hash()
@@ -141,7 +146,7 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	}
 
 	for _, in := range tx.Inputs {
-		if prevTXs[string(in.ID)].ID == nil {
+		if prevTXs[hex.EncodeToString(in.ID)].ID == nil {
 			log.Panic("ERROR: Previous transaction is not correct")
 		}
 	}
@@ -191,9 +196,10 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 	}
 
 	txCopy := Transaction{
-		ID:      tx.ID,
-		Inputs:  inputs,
-		Outputs: outputs,
+		ID:       tx.ID,
+		Inputs:   inputs,
+		Outputs:  outputs,
+		LockTime: tx.LockTime,
 	}
 	return txCopy
 }
