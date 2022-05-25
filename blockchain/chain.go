@@ -377,6 +377,7 @@ func DeserializeTransaction(data []byte) *Transaction {
 	decoder := gob.NewDecoder(bytes.NewReader(data))
 	err := decoder.Decode(transaction)
 	Handle(err)
+
 	return transaction
 }
 
