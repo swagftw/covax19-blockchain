@@ -1,3 +1,3 @@
 # COVAX-19 BLOCKCHAIN
 
-> COVAX-19 is a blockchain-based covid 19 vaccine supply chain that enables the creation of decentralized no trust based system.
+> COVAX-19 is a blockchain-based covid 19 vaccine supply chain that enables the creation of decentralized no trust based suppy chain system.
