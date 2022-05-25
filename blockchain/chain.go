@@ -174,7 +174,7 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
 
 		bc.LastHash = newBlock.Hash
 
-		return err
+		return errors2.Wrap(err, "error setting last hash")
 	})
 	Handle(err)
 

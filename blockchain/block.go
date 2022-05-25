@@ -11,6 +11,7 @@ import (
 type Block struct {
 	Timestamp    int64
 	Transactions []*Transaction
+	Difficulty   int
 	PrevHash     []byte
 	Hash         []byte
 	Nonce        int
@@ -35,10 +36,11 @@ func CreateBlock(transactions []*Transaction, prevHash []byte, height int) *Bloc
 		Nonce:        0,
 		Timestamp:    time.Now().Unix(),
 		Height:       height,
+		Difficulty:   DIFFICULTY,
 	}
 	pow := NewProof(block)
 	nonce, hash := pow.Run()
-	block.Hash = hash[:]
+	block.Hash = hash
 	block.Nonce = nonce
 
 	return block

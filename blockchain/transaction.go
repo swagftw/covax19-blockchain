@@ -12,15 +12,17 @@ import (
 	"log"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/swagftw/covax19-blockchain/wallet"
 )
 
 // Transaction represents a transaction
 type Transaction struct {
-	ID      []byte
-	Inputs  []TxInput
-	Outputs []TxOutput
+	ID       []byte
+	Inputs   []TxInput
+	Outputs  []TxOutput
+	LockTime int64
 }
 
 func (tx *Transaction) Serialize() []byte {
@@ -40,15 +42,14 @@ func (tx *Transaction) Hash() []byte {
 
 	txCopy := *tx
 	txCopy.ID = []byte{}
-
 	hash = sha256.Sum256(txCopy.Serialize())
 
 	return hash[:]
 }
 
 func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) (*Transaction, error) {
-	var inputs []TxInput
-	var outputs []TxOutput
+	inputs := make([]TxInput, 0)
+	outputs := make([]TxOutput, 0)
 
 	pubKeyHash := wallet.PublicKeyToHash(w.PublicKey)
 	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
@@ -76,9 +77,10 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) (*Tr
 	}
 
 	tx := Transaction{
-		ID:      nil,
-		Inputs:  inputs,
-		Outputs: outputs,
+		ID:       nil,
+		Inputs:   inputs,
+		Outputs:  outputs,
+		LockTime: time.Now().Unix(),
 	}
 	tx.ID = tx.Hash()
 	UTXO.Blockchain.SignTransaction(&tx, w.PrivateKey)
@@ -99,7 +101,7 @@ func CoinbaseTx(to, data string) *Transaction {
 	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
 	txout := NewTXOutput(20, to)
 
-	tx := Transaction{Inputs: []TxInput{txin}, Outputs: []TxOutput{*txout}}
+	tx := Transaction{Inputs: []TxInput{txin}, Outputs: []TxOutput{*txout}, LockTime: time.Now().Unix()}
 	tx.ID = tx.Hash()
 
 	return &tx

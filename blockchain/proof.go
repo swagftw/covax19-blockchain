@@ -24,8 +24,9 @@ type ProofOfWork struct {
 // NewProof creates a new proof of work
 func NewProof(b *Block) *ProofOfWork {
 	target := big.NewInt(1)
-	target.Lsh(target, uint(256-DIFFICULTY))
+	target.Lsh(target, uint(256-b.Difficulty))
 	pow := &ProofOfWork{b, target}
+
 	return pow
 }
 
@@ -36,10 +37,11 @@ func (pow *ProofOfWork) InitData(nonce int) []byte {
 			pow.Block.PrevHash,
 			pow.Block.HashTransactions(),
 			ToHex(int64(nonce)),
-			ToHex(int64(DIFFICULTY)),
+			ToHex(int64(pow.Block.Difficulty)),
 		},
 		[]byte{},
 	)
+
 	return data
 }
 

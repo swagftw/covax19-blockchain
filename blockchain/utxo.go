@@ -9,8 +9,7 @@ import (
 )
 
 var (
-	utxoPrefix   = []byte("utxo-")
-	prefixLength = len(utxoPrefix)
+	utxoPrefix = []byte("utxo-")
 )
 
 type UTXOSet struct {
@@ -51,6 +50,7 @@ func (u UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[s
 		return nil
 	})
 	Handle(err)
+
 	return accumulated, unspentOuts
 }
 
@@ -148,6 +148,7 @@ func (u *UTXOSet) Update(block *Block) {
 					var v []byte
 					err = item.Value(func(val []byte) error {
 						v = val
+
 						return nil
 					})
 					Handle(err)
@@ -164,7 +165,6 @@ func (u *UTXOSet) Update(block *Block) {
 						if err := txn.Delete(inID); err != nil {
 							log.Panic(err)
 						}
-
 					} else {
 						if err := txn.Set(inID, updatedOuts.Serialize()); err != nil {
 							log.Panic(err)
@@ -174,9 +174,7 @@ func (u *UTXOSet) Update(block *Block) {
 			}
 
 			newOutputs := TxOutputs{}
-			for _, out := range tx.Outputs {
-				newOutputs.Outputs = append(newOutputs.Outputs, out)
-			}
+			newOutputs.Outputs = append(newOutputs.Outputs, tx.Outputs...)
 
 			txID := append(utxoPrefix, tx.ID...)
 			if err := txn.Set(txID, newOutputs.Serialize()); err != nil {
@@ -205,7 +203,7 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 	}
 
 	collectSize := 100000
-	u.Blockchain.Database.View(func(txn *badger.Txn) error {
+	err := u.Blockchain.Database.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false
 		it := txn.NewIterator(opts)
@@ -230,6 +228,11 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 				log.Panic(err)
 			}
 		}
+
 		return nil
 	})
+
+	if err != nil {
+		return
+	}
 }

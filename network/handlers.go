@@ -49,7 +49,10 @@ func (h *HTTP) handleCmd(ctx echo.Context) error {
 	case getData:
 		h.HandleGetData(payload)
 	case tx:
-		h.HandleTx(payload)
+		err := h.HandleTx(payload)
+		if err != nil {
+			return err
+		}
 	case ver:
 		h.HandleVersion(payload)
 	default:
@@ -94,7 +97,7 @@ func (h *HTTP) handleSend(ctx echo.Context) error {
 		UTXOSet.Update(minedBlock)
 	} else {
 		SendTx(KnownNodes[0], txn)
-		log.Println("send tx")
+		log.Println("sent tx")
 	}
 
 	for _, node := range KnownNodes {
@@ -166,6 +169,14 @@ func (h *HTTP) HandleBlock(payload interface{}) {
 
 	log.Printf("Added block %x\n", block.Hash)
 	log.Printf("Blocks in transit: %d\n", len(blocksInTransit))
+
+	// if for the received block, we have the transaction in pool remove it
+	for _, transaction := range block.Transactions {
+		txID := hex.EncodeToString(transaction.ID)
+		if memoryPool[txID] != nil {
+			delete(memoryPool, txID)
+		}
+	}
 
 	if len(blocksInTransit) > 0 {
 		blockHash := blocksInTransit[0]
@@ -263,7 +274,7 @@ func NodeIsKnown(addr string) bool {
 	return false
 }
 
-func (h *HTTP) HandleTx(payload interface{}) {
+func (h *HTTP) HandleTx(payload interface{}) error {
 	txn := new(Tx)
 
 	data, err := json.Marshal(payload)
@@ -278,19 +289,31 @@ func (h *HTTP) HandleTx(payload interface{}) {
 
 	txData := txn.Transaction
 	transaction := blockchain.DeserializeTransaction(txData)
-	memoryPool[hex.EncodeToString(transaction.ID)] = transaction
 
-	log.Printf("Added transaction %x to mempool.\n", transaction.ID)
-
-	if nodeAddress == KnownNodes[0] {
-		for _, node := range KnownNodes {
-			if node != nodeAddress && node != txn.AddrFrom {
-				SendInv(node, "tx", [][]byte{transaction.ID})
-			}
-		}
-	} else if len(memoryPool) >= 2 && len(KnownNodes) >= 2 {
-		MineTx(h.chain)
+	if !h.chain.VerifyTransaction(transaction) {
+		return errors.New("Invalid transaction")
 	}
+
+	// if node is miner node put transaction into memory pool
+	// if len(minerAddress) > 0 {
+	memoryPool[hex.EncodeToString(transaction.ID)] = transaction
+	log.Printf("Added transaction %x to mempool.\n", transaction.ID)
+	//}
+
+	// as soon as we add transaction to memory pool create go routine and handle broadcasting there.
+	go func(transaction *blockchain.Transaction) {
+		if nodeAddress == KnownNodes[0] {
+			for _, node := range KnownNodes {
+				if node != nodeAddress && node != txn.AddrFrom {
+					SendInv(node, "tx", [][]byte{transaction.ID})
+				}
+			}
+		} else if len(memoryPool) >= 2 && len(minerAddress) > 0 {
+			MineTx(h.chain)
+		}
+	}(transaction)
+
+	return nil
 }
 
 func MineTx(chain *blockchain.Blockchain) {
@@ -400,9 +423,13 @@ func (h *HTTP) getChain(ctx echo.Context) error {
 		pow := blockchain.NewProof(block)
 		isProofValid := pow.Validate()
 
-		log.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
+		log.Printf("PoW: %s\n", strconv.FormatBool(isProofValid))
 
 		for _, tx := range block.Transactions {
+			if !chain.VerifyTransaction(tx) {
+				log.Panic("ERROR: Invalid transaction")
+			}
+
 			log.Println(tx)
 		}
 

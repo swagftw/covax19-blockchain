@@ -3,6 +3,7 @@ package network
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/labstack/echo/v4/middleware"
 	"io"
@@ -266,7 +267,8 @@ func StartServer(nodeID, minerAddr string) {
 	mainNodeID := GetMainNodeID()
 	chain, err := blockchain.ContinueBlockchain(nodeID, mainNodeID)
 
-	if err != nil {
+	if errors.Is(err, blockchain.ErrNoBlockchain) {
+		//chain = blockchain.CreateMainBlockchain(nodeID)
 		log.Panic(err)
 	}
 
@@ -305,6 +307,13 @@ func StartServer(nodeID, minerAddr string) {
 	if nodeAddress != KnownNodes[0] {
 		SendVersion(KnownNodes[0], chain)
 	}
+
+	go func() {
+		for {
+			log.Printf("mempool size: %d\n", len(memoryPool))
+			time.Sleep(time.Second * 5)
+		}
+	}()
 
 	log.Printf("%v", <-errChan)
 }
