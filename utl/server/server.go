@@ -1,15 +1,19 @@
-package transport
+package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/pkg/errors"
+
+	"github.com/swagftw/covax19-blockchain/utl/server/fault"
 )
 
 var (
@@ -18,42 +22,41 @@ var (
 
 // StartHTTPServer starts the HTTP server.
 func StartHTTPServer(e *echo.Echo) error {
-	return errors.Wrap(e.Start(":9090"), "failed to start HTTP server")
+	return e.Start(":9090")
 }
 
-// InitEcho initializes the echo instance.
 func InitEcho() *echo.Echo {
+	// InitEcho initializes the echo instance.
 	e := echo.New()
-	// Middleware
+	// JwtMiddleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+
+	e.HTTPErrorHandler = fault.ErrorHandler
 
 	return e
 }
 
-func sendRequest(method string, url string, payload interface{}) (interface{}, error) {
+// SendRequest sends a request to the given URL.
+func SendRequest(method string, url string, payload interface{}) (interface{}, error) {
 	var client http.Client
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		err = errors.Wrap(err, "failed to marshal payload")
-		log.Println(err)
-
 		return nil, err
 	}
 
 	request, err := http.NewRequest(method, url, bytes.NewBuffer(body))
 	if err != nil {
-		log.Println(errors.Wrap(err, "failed to create request"))
+		log.Println(err)
 
-		return nil, errors.Wrap(err, "failed to create request")
+		return nil, err
 	}
 
 	request.Header.Set("Content-Type", "application/json")
 
 	response, err := client.Do(request)
 	if err != nil {
-		err = errors.Wrap(err, "failed to send request")
 		log.Println(err)
 
 		return nil, err
@@ -62,7 +65,7 @@ func sendRequest(method string, url string, payload interface{}) (interface{}, e
 	defer func(Body io.ReadCloser) {
 		err = Body.Close()
 		if err != nil {
-			log.Println(errors.Wrap(err, "failed to close response body"))
+			log.Println(err)
 		}
 	}(response.Body)
 
@@ -72,7 +75,6 @@ func sendRequest(method string, url string, payload interface{}) (interface{}, e
 
 	body, err = ioutil.ReadAll(response.Body)
 	if err != nil {
-		err = errors.Wrap(err, "failed to read response body")
 		log.Println(err)
 
 		return nil, err
@@ -84,11 +86,18 @@ func sendRequest(method string, url string, payload interface{}) (interface{}, e
 
 	err = json.Unmarshal(body, &respPayload)
 	if err != nil {
-		err = errors.Wrap(err, "failed to unmarshal response body")
 		log.Println(err)
 
 		return nil, err
 	}
 
 	return respPayload, nil
+}
+
+func ToGoContext(c echo.Context) context.Context {
+	type key string
+
+	var newKey key = "key"
+
+	return context.WithValue(c.Request().Context(), newKey, "value")
 }

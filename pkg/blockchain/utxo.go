@@ -47,6 +47,7 @@ func (u UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[s
 				}
 			}
 		}
+
 		return nil
 	})
 	Handle(err)

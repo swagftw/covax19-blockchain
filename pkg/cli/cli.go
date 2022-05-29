@@ -2,16 +2,19 @@ package cli
 
 import (
 	"flag"
+	blockchain2 "github.com/swagftw/covax19-blockchain/pkg/blockchain"
+	"github.com/swagftw/covax19-blockchain/pkg/blockchain/network"
+	"github.com/swagftw/covax19-blockchain/pkg/user"
+	"github.com/swagftw/covax19-blockchain/pkg/wallet"
+	"github.com/swagftw/covax19-blockchain/types"
+	"github.com/swagftw/covax19-blockchain/utl/storage"
+	"gorm.io/gorm"
 	"log"
 	"os"
 	"runtime"
 	"strconv"
 
 	"github.com/dgraph-io/badger"
-
-	"github.com/swagftw/covax19-blockchain/blockchain"
-	"github.com/swagftw/covax19-blockchain/network"
-	"github.com/swagftw/covax19-blockchain/wallet"
 )
 
 type CommandLine struct{}
@@ -40,7 +43,7 @@ func (cli *CommandLine) validateArgs() {
 
 // printChain prints the Blockchain
 func (cli *CommandLine) printChain(nodeID string) {
-	chain, _ := blockchain.ContinueBlockchain(nodeID, network.KnownNodes[0])
+	chain, _ := blockchain2.ContinueBlockchain(nodeID, network.KnownNodes[0])
 	defer func(Database *badger.DB) {
 		err := Database.Close()
 		if err != nil {
@@ -54,7 +57,7 @@ func (cli *CommandLine) printChain(nodeID string) {
 		block := iterator.Next()
 		log.Printf("Prev. hash: %x\n", block.PrevHash)
 		log.Printf("Hash: %x\n", block.Hash)
-		pow := blockchain.NewProof(block)
+		pow := blockchain2.NewProof(block)
 		log.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
 
 		for _, tx := range block.Transactions {
@@ -73,7 +76,7 @@ func (cli *CommandLine) createBlockchain(nodeID, address string) {
 	if !wallet.ValidateAddress(address) {
 		log.Panic("Address is not valid")
 	}
-	chain, _ := blockchain.InitBlockchain(address, nodeID)
+	chain, _ := blockchain2.InitBlockchain(address, nodeID)
 
 	defer func(Database *badger.DB) {
 		err := Database.Close()
@@ -82,7 +85,7 @@ func (cli *CommandLine) createBlockchain(nodeID, address string) {
 		}
 	}(chain.Database)
 
-	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
+	UTXOSet := blockchain2.UTXOSet{Blockchain: chain}
 
 	UTXOSet.Reindex()
 	log.Println("Blockchain created")
@@ -93,7 +96,7 @@ func (cli *CommandLine) getBalance(address, nodeID string) {
 		log.Panic("Address is not valid")
 	}
 
-	chain, _ := blockchain.ContinueBlockchain(nodeID, network.KnownNodes[0])
+	chain, _ := blockchain2.ContinueBlockchain(nodeID, network.KnownNodes[0])
 
 	defer func(Database *badger.DB) {
 		err := Database.Close()
@@ -102,7 +105,7 @@ func (cli *CommandLine) getBalance(address, nodeID string) {
 		}
 	}(chain.Database)
 
-	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
+	UTXOSet := blockchain2.UTXOSet{Blockchain: chain}
 	balance := 0
 
 	pubKeyHash := wallet.Base58Decode([]byte(address))
@@ -125,7 +128,7 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 		log.Panic("Address from is not valid")
 	}
 
-	chain, _ := blockchain.ContinueBlockchain(nodeID, network.KnownNodes[0])
+	chain, _ := blockchain2.ContinueBlockchain(nodeID, network.KnownNodes[0])
 
 	defer func(Database *badger.DB) {
 		err := Database.Close()
@@ -134,17 +137,17 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 		}
 	}(chain.Database)
 
-	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
+	UTXOSet := blockchain2.UTXOSet{Blockchain: chain}
 
 	wallets, err := wallet.CreateWallets()
-	blockchain.Handle(err)
+	blockchain2.Handle(err)
 	wlt := wallets.GetWallet(from)
 
-	tx, err := blockchain.NewTransaction(wlt, to, amount, &UTXOSet)
-	blockchain.Handle(err)
+	tx, err := blockchain2.NewTransaction(wlt, to, amount, &UTXOSet)
+	blockchain2.Handle(err)
 	if mineNow {
-		cbTx := blockchain.CoinbaseTx(from, "")
-		txs := []*blockchain.Transaction{cbTx, tx}
+		cbTx := blockchain2.CoinbaseTx(from, "")
+		txs := []*blockchain2.Transaction{cbTx, tx}
 		block := chain.MineBlock(txs)
 		UTXOSet.Update(block)
 	} else {
@@ -176,10 +179,10 @@ func (cli *CommandLine) listAddresses(nodeID string) {
 }
 
 func (cli *CommandLine) reindexUTXO(nodeID string) {
-	chain, _ := blockchain.ContinueBlockchain(nodeID, network.KnownNodes[0])
+	chain, _ := blockchain2.ContinueBlockchain(nodeID, network.KnownNodes[0])
 	defer chain.Database.Close()
 
-	UTXO := blockchain.UTXOSet{Blockchain: chain}
+	UTXO := blockchain2.UTXOSet{Blockchain: chain}
 	UTXO.Reindex()
 
 	count := UTXO.CountTransactions()
@@ -222,6 +225,7 @@ func (cli *CommandLine) Run() {
 
 	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "The address to send genesis block reward to")
+	createBlockchainPassword := createBlockchainCmd.String("password", "", "password for the government account")
 	sendFrom := sendCmd.String("from", "", "Source wallet address")
 	sendTo := sendCmd.String("to", "", "Destination wallet address")
 	sendMine := sendCmd.Bool("mine", false, "Mine immediately on the same node")
@@ -237,40 +241,40 @@ func (cli *CommandLine) Run() {
 	case "getbalance":
 		err := getBalanceCmd.Parse(os.Args[2:])
 		if err != nil {
-			blockchain.Handle(err)
+			blockchain2.Handle(err)
 		}
 	case "createblockchain":
 		err := createBlockchainCmd.Parse(os.Args[2:])
 		if err != nil {
-			blockchain.Handle(err)
+			blockchain2.Handle(err)
 		}
 	case "send":
 		err := sendCmd.Parse(os.Args[2:])
 		if err != nil {
-			blockchain.Handle(err)
+			blockchain2.Handle(err)
 		}
 	case "printchain":
 		err := printChainCmd.Parse(os.Args[2:])
 		if err != nil {
-			blockchain.Handle(err)
+			blockchain2.Handle(err)
 		}
 
 	case "createwallet":
 		err := createWalletCmd.Parse(os.Args[2:])
 		if err != nil {
-			blockchain.Handle(err)
+			blockchain2.Handle(err)
 		}
 
 	case "listaddresses":
 		err := listAddressesCmd.Parse(os.Args[2:])
 		if err != nil {
-			blockchain.Handle(err)
+			blockchain2.Handle(err)
 		}
 
 	case "startnode":
 		err := startNodeCmd.Parse(os.Args[2:])
 		if err != nil {
-			blockchain.Handle(err)
+			blockchain2.Handle(err)
 		}
 	default:
 		cli.printUsage()
@@ -290,6 +294,14 @@ func (cli *CommandLine) Run() {
 			createBlockchainCmd.Usage()
 			runtime.Goexit()
 		}
+
+		if *createBlockchainPassword == "" {
+			createBlockchainCmd.Usage()
+			runtime.Goexit()
+		}
+
+		cli.createGovernmentAccount(*createBlockchainPassword, *createBlockchainAddress)
+
 		cli.createBlockchain(nodeID, *createBlockchainAddress)
 	}
 
@@ -307,6 +319,7 @@ func (cli *CommandLine) Run() {
 			startNodeCmd.Usage()
 			runtime.Goexit()
 		}
+
 		cli.StartNode(nodeID, *startNodeMiner)
 	}
 
@@ -324,5 +337,39 @@ func (cli *CommandLine) Run() {
 
 	if reindexUTXOCmd.Parsed() {
 		cli.reindexUTXO(nodeID)
+	}
+}
+
+func (cli *CommandLine) createGovernmentAccount(password, address string) {
+	gdb, err := storage.NewPostgresDB()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	err = gdb.Transaction(func(txn *gorm.DB) error {
+		user := &user.User{
+			Name:          "Central Government",
+			Email:         "government@gov.in",
+			Type:          types.UserTypeGovernment,
+			WalletAddress: address,
+			Verified:      true,
+		}
+
+		// create user.
+		err = txn.Model(user).Create(user).Error
+		if err != nil {
+			return err
+		}
+
+		// create password.
+		err = txn.Save(&user.Password{
+			UserID:   user.ID,
+			Password: password,
+		}).Error
+
+		return err
+	})
+	if err != nil {
+		log.Panic(err)
 	}
 }

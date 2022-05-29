@@ -9,12 +9,11 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"github.com/swagftw/covax19-blockchain/pkg/wallet"
 	"log"
 	"math/big"
 	"strings"
 	"time"
-
-	"github.com/swagftw/covax19-blockchain/wallet"
 )
 
 // Transaction represents a transaction

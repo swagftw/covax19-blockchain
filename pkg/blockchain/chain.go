@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/swagftw/covax19-blockchain/wallet"
 	"io"
 	"io/ioutil"
 	"log"
@@ -15,8 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/swagftw/covax19-blockchain/pkg/wallet"
+
 	"github.com/dgraph-io/badger"
-	errors2 "github.com/pkg/errors"
 )
 
 const (
@@ -63,7 +63,7 @@ func InitBlockchain(address, nodeID string) (*Blockchain, error) {
 
 		lastHash = genesis.Hash
 
-		return errors2.Wrap(err, "error setting last hash")
+		return err
 	})
 	Handle(err)
 
@@ -95,7 +95,7 @@ func ContinueBlockchain(nodeID, mainNodeID string) (*Blockchain, error) {
 			return nil
 		})
 
-		return errors2.Wrap(err, "error getting last hash")
+		return err
 	})
 	Handle(err)
 
@@ -174,7 +174,7 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
 
 		bc.LastHash = newBlock.Hash
 
-		return errors2.Wrap(err, "error setting last hash")
+		return err
 	})
 	Handle(err)
 
@@ -229,11 +229,11 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 				return nil
 			})
 
-			return errors2.Wrap(err, "error getting block")
+			return err
 		}
 	})
 
-	return block, errors2.Wrap(err, "error getting block")
+	return block, err
 }
 
 func (bc *Blockchain) GetBestHeight() int {
@@ -258,7 +258,7 @@ func (bc *Blockchain) GetBestHeight() int {
 			return nil
 		})
 
-		return errors2.Wrap(err, "error getting last hash")
+		return err
 	})
 	Handle(err)
 

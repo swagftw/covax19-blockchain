@@ -3,7 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/swagftw/covax19-blockchain/wallet"
+	"github.com/swagftw/covax19-blockchain/pkg/wallet"
 )
 
 type TxOutput struct {

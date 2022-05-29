@@ -1,10 +1,5 @@
 package types
 
-type Wallet struct {
-	Address string `json:"address,omitempty"`
-	ID      string `json:"id,omitempty"`
-}
-
 type SendTokens struct {
 	From    string `json:"from"`
 	To      string `json:"to"`

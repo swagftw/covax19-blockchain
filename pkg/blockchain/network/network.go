@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/labstack/echo/v4/middleware"
 	"io"
 	"io/ioutil"
 	"log"
@@ -15,13 +14,13 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/vrecan/death/v3"
 
-	"github.com/swagftw/covax19-blockchain/blockchain"
+	blockchain2 "github.com/swagftw/covax19-blockchain/pkg/blockchain"
 )
 
 const (
@@ -36,14 +35,14 @@ var (
 	KnownNodes      = []string{
 		"localhost:8080", // main node for chain operations
 	}
-	memoryPool = make(map[string]*blockchain.Transaction)
+	memoryPool = make(map[string]*blockchain2.Transaction)
 )
 
 type command string
 
 const (
 	block     command = "block"
-	tx        command = "tx"
+	txn       command = "tx"
 	addr      command = "addr"
 	getBlocks command = "getBlocks"
 	getData   command = "getData"
@@ -93,7 +92,7 @@ type CmdRequest struct {
 }
 
 type HTTP struct {
-	chain  *blockchain.Blockchain
+	chain  *blockchain2.Blockchain
 	nodeID string
 }
 
@@ -149,7 +148,7 @@ func SendData(addr string, request CmdRequest) {
 //	SendData(address, request)
 // }
 
-func SendBlock(addr string, b *blockchain.Block) {
+func SendBlock(addr string, b *blockchain2.Block) {
 	data := Block{nodeAddress, b.Serialize()}
 	request := CmdRequest{
 		Cmd:     block,
@@ -167,16 +166,16 @@ func SendInv(address, kind string, items [][]byte) {
 	SendData(address, request)
 }
 
-func SendTx(addr string, t *blockchain.Transaction) {
+func SendTx(addr string, t *blockchain2.Transaction) {
 	data := Tx{nodeAddress, t.Serialize()}
 	request := CmdRequest{
-		Cmd:     tx,
+		Cmd:     txn,
 		Payload: data,
 	}
 	SendData(addr, request)
 }
 
-func SendVersion(addr string, chain *blockchain.Blockchain) {
+func SendVersion(addr string, chain *blockchain2.Blockchain) {
 	bestHeight := chain.GetBestHeight()
 	payload := Version{version, bestHeight, nodeAddress}
 
@@ -205,7 +204,7 @@ func SendGetData(address, kind string, id []byte) {
 	SendData(address, request)
 }
 
-func CloseDB(chain *blockchain.Blockchain) {
+func CloseDB(chain *blockchain2.Blockchain) {
 	d := death.NewDeath(syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 
 	d.WaitForDeathWithFunc(func() {
@@ -265,10 +264,9 @@ func StartServer(nodeID, minerAddr string) {
 
 	minerAddress = minerAddr
 	mainNodeID := GetMainNodeID()
-	chain, err := blockchain.ContinueBlockchain(nodeID, mainNodeID)
+	chain, err := blockchain2.ContinueBlockchain(nodeID, mainNodeID)
 
-	if errors.Is(err, blockchain.ErrNoBlockchain) {
-		//chain = blockchain.CreateMainBlockchain(nodeID)
+	if errors.Is(err, blockchain2.ErrNoBlockchain) {
 		log.Panic(err)
 	}
 
@@ -294,26 +292,9 @@ func StartServer(nodeID, minerAddr string) {
 		errChan <- err
 	}(ech)
 
-	// wait for server to start
-	for {
-		_, err = net.Dial("tcp", fmt.Sprintf("localhost:%s", nodeID))
-		if err == nil {
-			break
-		}
-
-		time.Sleep(time.Millisecond * 100)
-	}
-
 	if nodeAddress != KnownNodes[0] {
 		SendVersion(KnownNodes[0], chain)
 	}
-
-	go func() {
-		for {
-			log.Printf("mempool size: %d\n", len(memoryPool))
-			time.Sleep(time.Second * 5)
-		}
-	}()
 
 	log.Printf("%v", <-errChan)
 }

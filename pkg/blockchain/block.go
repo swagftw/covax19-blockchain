@@ -58,6 +58,7 @@ func (b *Block) HashTransactions() []byte {
 		txHashes = append(txHashes, transaction.Serialize())
 	}
 	tree := NewMerkleTree(txHashes)
+
 	return tree.RootNode.Data
 }
 
@@ -76,5 +77,6 @@ func Deserialize(data []byte) *Block {
 	decoder := gob.NewDecoder(bytes.NewReader(data))
 	err := decoder.Decode(block)
 	Handle(err)
+
 	return block
 }

@@ -11,11 +11,11 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"github.com/pkg/errors" //nolint:gci
+	"github.com/pkg/errors"
 
-	"github.com/swagftw/covax19-blockchain/blockchain"
+	"github.com/swagftw/covax19-blockchain/pkg/blockchain"
+	"github.com/swagftw/covax19-blockchain/pkg/wallet"
 	"github.com/swagftw/covax19-blockchain/types"
-	"github.com/swagftw/covax19-blockchain/wallet"
 )
 
 // handleCmd handles inter-node commands and routes them.
@@ -30,7 +30,7 @@ func (h *HTTP) handleCmd(ctx echo.Context) error {
 
 	req := new(CmdRequest)
 	if err := ctx.Bind(req); err != nil {
-		return errors.Wrap(err, "failed to bind request")
+		return err
 	}
 
 	log.Printf("Received command %s", req.Cmd)
@@ -48,7 +48,7 @@ func (h *HTTP) handleCmd(ctx echo.Context) error {
 		h.HandleGetBlocks(payload)
 	case getData:
 		h.HandleGetData(payload)
-	case tx:
+	case txn:
 		err := h.HandleTx(payload)
 		if err != nil {
 			return err
@@ -66,7 +66,7 @@ func (h *HTTP) handleCmd(ctx echo.Context) error {
 func (h *HTTP) handleSend(ctx echo.Context) error {
 	sendDTO := new(types.SendTokens)
 	if err := ctx.Bind(sendDTO); err != nil {
-		return errors.Wrap(err, "HandleSend: Failed to bind payload")
+		return err
 	}
 
 	if !wallet.ValidateAddress(sendDTO.To) {
@@ -87,7 +87,7 @@ func (h *HTTP) handleSend(ctx echo.Context) error {
 	txn, err := blockchain.NewTransaction(wlt, sendDTO.To, sendDTO.Amount, &UTXOSet)
 
 	if err != nil {
-		return errors.Wrap(err, "HandleSend: Failed to create new transaction")
+		return err
 	}
 
 	if sendDTO.MineNow {
@@ -108,9 +108,9 @@ func (h *HTTP) handleSend(ctx echo.Context) error {
 
 	log.Println("Success!")
 
-	return errors.Wrap(ctx.JSON(http.StatusOK, map[string]string{
+	return ctx.JSON(http.StatusOK, map[string]string{
 		"message": "Success!",
-	}), "HandleSend: Failed to send response")
+	})
 }
 
 func (h *HTTP) createWallet(ctx echo.Context) error {
@@ -119,10 +119,7 @@ func (h *HTTP) createWallet(ctx echo.Context) error {
 	wallets.SaveFile()
 	log.Printf("Your new address: %s\n", wlt.Address())
 
-	return errors.Wrap(
-		ctx.JSON(http.StatusCreated, map[string]interface{}{"address": string(wlt.Address())}),
-		"failed to create wallet",
-	)
+	return ctx.JSON(http.StatusCreated, map[string]interface{}{"address": string(wlt.Address())})
 }
 
 func (h *HTTP) HandleAddr(payload interface{}) {
@@ -298,7 +295,7 @@ func (h *HTTP) HandleTx(payload interface{}) error {
 	// if len(minerAddress) > 0 {
 	memoryPool[hex.EncodeToString(transaction.ID)] = transaction
 	log.Printf("Added transaction %x to mempool.\n", transaction.ID)
-	//}
+	// }
 
 	// as soon as we add transaction to memory pool create go routine and handle broadcasting there.
 	go func(transaction *blockchain.Transaction) {
@@ -405,9 +402,7 @@ func (h *HTTP) getWallets(ctx echo.Context) error {
 	wallets, _ := wallet.CreateWallets()
 	addresses := wallets.GetAllAddresses()
 
-	return errors.Wrap(
-		ctx.JSON(http.StatusOK, map[string]interface{}{"addresses": addresses}),
-		"error in getWallets")
+	return ctx.JSON(http.StatusOK, map[string]interface{}{"addresses": addresses})
 }
 
 func (h *HTTP) getChain(ctx echo.Context) error {
@@ -447,7 +442,7 @@ func (h *HTTP) getChain(ctx echo.Context) error {
 		}
 	}
 
-	return errors.Wrap(ctx.JSON(http.StatusOK, types.Blockchain{Blocks: blocks}), "error in getBlockchain")
+	return ctx.JSON(http.StatusOK, types.Blockchain{Blocks: blocks})
 }
 
 func (h *HTTP) getBalance(ctx echo.Context) error {
@@ -470,5 +465,5 @@ func (h *HTTP) getBalance(ctx echo.Context) error {
 		balance += out.Value
 	}
 
-	return errors.Wrap(ctx.JSON(http.StatusOK, map[string]interface{}{"balance": balance}), "error in getBalance")
+	return ctx.JSON(http.StatusOK, map[string]interface{}{"balance": balance})
 }

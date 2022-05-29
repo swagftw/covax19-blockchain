@@ -19,6 +19,15 @@ const (
 type Wallet struct {
 	PrivateKey ecdsa.PrivateKey
 	PublicKey  []byte
+	UserID     string
+}
+
+func GenerateNewWallet() string {
+	wallets, _ := CreateWallets()
+	wlt := wallets.AddWallet()
+	wallets.SaveFile()
+
+	return string(wlt.Address())
 }
 
 func (w *Wallet) Address() []byte {
@@ -38,23 +47,28 @@ func NewKeyPair() (ecdsa.PrivateKey, []byte) {
 	if err != nil {
 		log.Panic(err)
 	}
+
 	publicKey := append(privateKey.PublicKey.X.Bytes(), privateKey.PublicKey.Y.Bytes()...)
+
 	return *privateKey, publicKey
 }
 
 func MakeWallet() *Wallet {
 	private, public := NewKeyPair()
 	wallet := Wallet{PrivateKey: private, PublicKey: public}
+
 	return &wallet
 }
 
 func PublicKeyToHash(publicKey []byte) []byte {
 	pubHash := sha256.Sum256(publicKey)
 	hasher := ripemd160.New()
+
 	_, err := hasher.Write(pubHash[:])
 	if err != nil {
 		log.Panic(err)
 	}
+
 	return hasher.Sum(nil)
 }
 

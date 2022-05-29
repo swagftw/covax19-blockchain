@@ -8,8 +8,6 @@ import (
 	"log"
 	"os"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 const walletFile = "./tmp/wallets.data"
@@ -54,7 +52,7 @@ func (ws *Wallets) LoadFile() error {
 		if _, err := os.Stat(walletLock); err != nil {
 			_, err = os.Create(walletLock)
 			if err != nil {
-				return errors.Wrap(err, "failed to create lock file")
+				return err
 			}
 
 			break
@@ -65,14 +63,14 @@ func (ws *Wallets) LoadFile() error {
 	}
 
 	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
-		return errors.Wrap(err, "file does not exist")
+		return err
 	}
 
 	var wallets Wallets
 
 	fileContent, err := ioutil.ReadFile(walletFile)
 	if err != nil {
-		return errors.Wrap(err, "failed to read file")
+		return err
 	}
 
 	gob.Register(elliptic.P256())
@@ -80,7 +78,7 @@ func (ws *Wallets) LoadFile() error {
 	err = decoder.Decode(&wallets)
 
 	if err != nil {
-		return errors.Wrap(err, "error loading file")
+		return err
 	}
 
 	ws.Wallets = wallets.Wallets
