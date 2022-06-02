@@ -74,7 +74,7 @@ func (s service) GetUserByEmail(ctx context.Context, email string) (*types.User,
 	usr, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		if err == types.ErrUserNotFound {
-			return nil, fault.New(errUserNotFound, "user with email does not exist", http.StatusNotFound)
+			return nil, types.ErrUserNotFound
 		}
 
 		return nil, err
