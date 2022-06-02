@@ -22,7 +22,7 @@ func Start() {
 	errChan := make(chan error)
 	// get echo
 	ech := server.InitEcho()
-	v1Group := ech.Group("/v1")
+	v1Group := ech.Group("/api/v1")
 
 	// get db connection
 	db, err := storage.NewPostgresDB()
