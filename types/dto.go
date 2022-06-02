@@ -1,10 +1,10 @@
 package types
 
 type SendTokens struct {
-	From    string `json:"from"`
-	To      string `json:"to"`
-	Amount  int    `json:"amount"`
-	MineNow bool   `json:"mineNow,omitempty"`
+	From             string `json:"from"`
+	To               string `json:"to"`
+	Amount           int    `json:"amount"`
+	SkipBalanceCheck bool   `json:"skipBalanceCheck"`
 }
 
 type Block struct {

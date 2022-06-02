@@ -33,6 +33,7 @@ func (u UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[s
 			var v []byte
 			err := item.Value(func(val []byte) error {
 				v = val
+
 				return nil
 			})
 			Handle(err)

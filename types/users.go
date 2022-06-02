@@ -19,6 +19,7 @@ type (
 		GetUser(ctx context.Context, id string) (*User, error)
 		GetUsers(ctx context.Context) ([]*User, error)
 		GetUserByEmail(ctx context.Context, email string) (*User, error)
+		GetUserByWallet(ctx context.Context, wallet string) (*User, error)
 		CreateUser(ctx context.Context, user *CreateUserRequestDto) (*User, error)
 		UpdateUser(ctx context.Context, user *User) (*User, error)
 		CheckPassword(ctx context.Context, userID uint, password string) (bool, error)

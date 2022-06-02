@@ -2,19 +2,21 @@ package cli
 
 import (
 	"flag"
+	"log"
+	"os"
+	"runtime"
+	"strconv"
+
+	"gorm.io/gorm"
+
+	"github.com/dgraph-io/badger"
+
 	blockchain2 "github.com/swagftw/covax19-blockchain/pkg/blockchain"
 	"github.com/swagftw/covax19-blockchain/pkg/blockchain/network"
 	"github.com/swagftw/covax19-blockchain/pkg/user"
 	"github.com/swagftw/covax19-blockchain/pkg/wallet"
 	"github.com/swagftw/covax19-blockchain/types"
 	"github.com/swagftw/covax19-blockchain/utl/storage"
-	"gorm.io/gorm"
-	"log"
-	"os"
-	"runtime"
-	"strconv"
-
-	"github.com/dgraph-io/badger"
 )
 
 type CommandLine struct{}
@@ -143,7 +145,7 @@ func (cli *CommandLine) send(from, to string, amount int, nodeID string, mineNow
 	blockchain2.Handle(err)
 	wlt := wallets.GetWallet(from)
 
-	tx, err := blockchain2.NewTransaction(wlt, to, amount, &UTXOSet)
+	tx, err := blockchain2.NewTransaction(wlt, to, amount, &UTXOSet, false)
 	blockchain2.Handle(err)
 	if mineNow {
 		cbTx := blockchain2.CoinbaseTx(from, "")
@@ -347,25 +349,29 @@ func (cli *CommandLine) createGovernmentAccount(password, address string) {
 	}
 
 	err = gdb.Transaction(func(txn *gorm.DB) error {
-		user := &user.User{
+		// create password.
+		pwd := &user.Password{
+			Password: password,
+		}
+		err = txn.Save(pwd).Error
+		if err != nil {
+			return err
+		}
+
+		usr := &user.User{
 			Name:          "Central Government",
 			Email:         "government@gov.in",
 			Type:          types.UserTypeGovernment,
 			WalletAddress: address,
 			Verified:      true,
+			PasswordID:    pwd.ID,
 		}
 
 		// create user.
-		err = txn.Model(user).Create(user).Error
+		err = txn.Model(usr).Create(usr).Error
 		if err != nil {
 			return err
 		}
-
-		// create password.
-		err = txn.Save(&user.Password{
-			UserID:   user.ID,
-			Password: password,
-		}).Error
 
 		return err
 	})

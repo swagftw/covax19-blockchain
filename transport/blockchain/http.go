@@ -1,4 +1,4 @@
-package transport
+package blockchain
 
 import (
 	"fmt"
@@ -12,28 +12,31 @@ import (
 	"github.com/swagftw/covax19-blockchain/utl/server"
 )
 
-// InitHandlers initializes all the handlers.
-func InitHandlers(ech *echo.Echo) {
-	ech.GET("/ping", ping)
+type httpHandler struct {
+	usrService types.UserService
+}
 
-	v1Group := ech.Group("/v1")
+// NewHTTP initializes all the handlers.
+func NewHTTP(v1Group *echo.Group, userService types.UserService) {
+	h := &httpHandler{usrService: userService}
+	v1Group.GET("/ping", h.ping)
 
 	// wallet related handlers
 	chainGroup := v1Group.Group("/chain")
-	chainGroup.POST("/wallets", createWallet)
-	chainGroup.GET("/wallets", getWallets)
-	chainGroup.GET("/wallets/balance/:address", getBalance)
+	chainGroup.POST("/wallets", h.createWallet)
+	chainGroup.GET("/wallets", h.getWallets)
+	chainGroup.GET("/wallets/balance/:address", h.getBalance)
 
 	// blockchain related handlers
-	chainGroup.POST("/:address", createBlockchain)
-	chainGroup.GET("", getBlockchain)
+	chainGroup.POST("/:address", h.createBlockchain)
+	chainGroup.GET("", h.getBlockchain)
 
 	// transaction related handlers
 	transactionGroup := v1Group.Group("/transactions")
-	transactionGroup.POST("/send", send)
+	transactionGroup.POST("/send", h.send)
 }
 
-func getBalance(ctx echo.Context) error {
+func (h *httpHandler) getBalance(ctx echo.Context) error {
 	address := ctx.Param("address")
 	if address == "" {
 		return errors.New("address is required")
@@ -43,7 +46,7 @@ func getBalance(ctx echo.Context) error {
 
 	resp, err := server.SendRequest(http.MethodGet, endpoint, nil)
 
-	if err == server.ErrBadRequest {
+	if err != nil {
 		return ctx.JSON(http.StatusBadRequest, err)
 	}
 
@@ -51,16 +54,16 @@ func getBalance(ctx echo.Context) error {
 }
 
 // ping is a simple health check endpoint.
-func ping(ctx echo.Context) error {
+func (h *httpHandler) ping(ctx echo.Context) error {
 	return ctx.String(http.StatusOK, "pong")
 }
 
 // createWallet creates wallet and returns its address.
-func createWallet(ctx echo.Context) error {
+func (h *httpHandler) createWallet(ctx echo.Context) error {
 	endpoint := fmt.Sprintf("http://%s/v1/chain/wallets", network.KnownNodes[0])
 	resp, err := server.SendRequest(http.MethodPost, endpoint, nil)
 
-	if err != server.ErrBadRequest {
+	if err != nil {
 		return ctx.JSON(http.StatusBadRequest, err)
 	}
 
@@ -68,11 +71,11 @@ func createWallet(ctx echo.Context) error {
 }
 
 // getAllWallets returns all wallets.
-func getWallets(ctx echo.Context) error {
+func (h *httpHandler) getWallets(ctx echo.Context) error {
 	endpoint := fmt.Sprintf("http://%s/v1/chain/wallets", network.KnownNodes[0])
 	resp, err := server.SendRequest(http.MethodGet, endpoint, nil)
 
-	if err != server.ErrBadRequest {
+	if err != nil {
 		return err
 	}
 
@@ -80,7 +83,7 @@ func getWallets(ctx echo.Context) error {
 }
 
 // createBlockchain creates a new blockchain.
-func createBlockchain(ctx echo.Context) error {
+func (h *httpHandler) createBlockchain(ctx echo.Context) error {
 	address := ctx.Param("address")
 
 	endpoint := fmt.Sprintf("http://%s/v1/chain", network.KnownNodes[0])
@@ -94,7 +97,7 @@ func createBlockchain(ctx echo.Context) error {
 }
 
 // send creates a transaction.
-func send(ctx echo.Context) error {
+func (h *httpHandler) send(ctx echo.Context) error {
 	endpoint := fmt.Sprintf("http://%s/v1/transactions/send", network.KnownNodes[0])
 	sendTokens := new(types.SendTokens)
 
@@ -102,17 +105,27 @@ func send(ctx echo.Context) error {
 		return err
 	}
 
+	// get sender by address
+	user, err := h.usrService.GetUserByWallet(server.ToGoContext(ctx), sendTokens.From)
+	if err != nil {
+		return err
+	}
+
+	if user.Type == types.UserTypeGovernment {
+		sendTokens.SkipBalanceCheck = true
+	}
+
 	resp, err := server.SendRequest(http.MethodPost, endpoint, sendTokens)
 
-	if err != server.ErrBadRequest {
-		return ctx.JSON(http.StatusBadRequest, err)
+	if err != nil {
+		return err
 	}
 
 	return ctx.JSON(http.StatusOK, resp)
 }
 
 // getBlockchain returns the blockchain.
-func getBlockchain(ctx echo.Context) error {
+func (h *httpHandler) getBlockchain(ctx echo.Context) error {
 	node := ctx.QueryParam("nodeID")
 	if node == "" {
 		return errors.New("nodeID is required")
@@ -121,7 +134,7 @@ func getBlockchain(ctx echo.Context) error {
 	endpoint := fmt.Sprintf("http://localhost:%s/v1/chain", node)
 
 	resp, err := server.SendRequest(http.MethodGet, endpoint, nil)
-	if err != server.ErrBadRequest {
+	if err != nil {
 		return ctx.JSON(http.StatusBadRequest, err)
 	}
 

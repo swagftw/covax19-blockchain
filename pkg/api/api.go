@@ -8,6 +8,7 @@ import (
 	"github.com/swagftw/covax19-blockchain/pkg/user"
 	userRepo "github.com/swagftw/covax19-blockchain/pkg/user/repository"
 	authHttp "github.com/swagftw/covax19-blockchain/transport/auth"
+	"github.com/swagftw/covax19-blockchain/transport/blockchain"
 	userHttp "github.com/swagftw/covax19-blockchain/transport/users"
 	"github.com/swagftw/covax19-blockchain/utl/jwt"
 	"github.com/swagftw/covax19-blockchain/utl/middleware"
@@ -42,6 +43,7 @@ func Start() {
 	// init handlers
 	userHttp.NewHTTP(v1Group, userService, middleware.JwtMiddleware(jwtService))
 	authHttp.NewHTTP(v1Group, authService)
+	blockchain.NewHTTP(v1Group, userService)
 
 	// start server
 	go func() {

@@ -84,29 +84,29 @@ func (h *HTTP) handleSend(ctx echo.Context) error {
 	wallet.DeleteWalletLock()
 
 	wlt := wallets.GetWallet(sendDTO.From)
-	txn, err := blockchain.NewTransaction(wlt, sendDTO.To, sendDTO.Amount, &UTXOSet)
 
-	if err != nil {
-		return err
-	}
-
-	if sendDTO.MineNow {
-		cbTx := blockchain.CoinbaseTx(sendDTO.From, "")
-		txs := []*blockchain.Transaction{cbTx, txn}
-		minedBlock := h.chain.MineBlock(txs)
-		UTXOSet.Update(minedBlock)
-	} else {
-		SendTx(KnownNodes[0], txn)
-		log.Println("sent tx")
-	}
-
-	for _, node := range KnownNodes {
-		if node != h.nodeID {
-			SendVersion(node, h.chain)
+	// if same transaction id is created, try again.
+	for {
+		txn, err := blockchain.NewTransaction(wlt, sendDTO.To, sendDTO.Amount, &UTXOSet, sendDTO.SkipBalanceCheck)
+		if err != nil {
+			return err
 		}
+
+		if memPool.transactions[hex.EncodeToString(txn.ID)] != nil {
+			continue
+		}
+
+		memPool.transactions[hex.EncodeToString(txn.ID)] = txn
+		log.Printf("Added transaction to mempool %s\n", hex.EncodeToString(txn.ID))
+
+		break
 	}
 
-	log.Println("Success!")
+	// go func() {
+	// 	memPool.mutex.Lock()
+	MineTx(h.chain)
+	// memPool.mutex.Unlock()
+	// }()
 
 	return ctx.JSON(http.StatusOK, map[string]string{
 		"message": "Success!",
@@ -170,8 +170,8 @@ func (h *HTTP) HandleBlock(payload interface{}) {
 	// if for the received block, we have the transaction in pool remove it
 	for _, transaction := range block.Transactions {
 		txID := hex.EncodeToString(transaction.ID)
-		if memoryPool[txID] != nil {
-			delete(memoryPool, txID)
+		if memPool.transactions[txID] != nil {
+			delete(memPool.transactions, txID)
 		}
 	}
 
@@ -227,7 +227,7 @@ func (h *HTTP) HandleGetData(payload interface{}) {
 
 	if getDataPayload.Type == "tx" {
 		txID := hex.EncodeToString(getDataPayload.ID)
-		tx := memoryPool[txID]
+		tx := memPool.transactions[txID]
 
 		SendTx(getDataPayload.AddrFrom, tx)
 	}
@@ -293,7 +293,7 @@ func (h *HTTP) HandleTx(payload interface{}) error {
 
 	// if node is miner node put transaction into memory pool
 	// if len(minerAddress) > 0 {
-	memoryPool[hex.EncodeToString(transaction.ID)] = transaction
+	memPool.transactions[hex.EncodeToString(transaction.ID)] = transaction
 	log.Printf("Added transaction %x to mempool.\n", transaction.ID)
 	// }
 
@@ -305,7 +305,7 @@ func (h *HTTP) HandleTx(payload interface{}) error {
 					SendInv(node, "tx", [][]byte{transaction.ID})
 				}
 			}
-		} else if len(memoryPool) >= 2 && len(minerAddress) > 0 {
+		} else if len(memPool.transactions) >= 2 && len(minerAddress) > 0 {
 			MineTx(h.chain)
 		}
 	}(transaction)
@@ -316,10 +316,10 @@ func (h *HTTP) HandleTx(payload interface{}) error {
 func MineTx(chain *blockchain.Blockchain) {
 	var txs []*blockchain.Transaction
 
-	for id := range memoryPool {
-		log.Printf("Mining tx %x\n", memoryPool[id].ID)
+	for id := range memPool.transactions {
+		log.Printf("Mining tx %x\n", memPool.transactions[id].ID)
 
-		tx := memoryPool[id]
+		tx := memPool.transactions[id]
 		if chain.VerifyTransaction(tx) {
 			txs = append(txs, tx)
 		}
@@ -331,29 +331,30 @@ func MineTx(chain *blockchain.Blockchain) {
 		return
 	}
 
-	cbTx := blockchain.CoinbaseTx(minerAddress, "")
-	txs = append(txs, cbTx)
+	// cbTx := blockchain.CoinbaseTx(minerAddress, "")
+	// txs = append(txs, cbTx)
 
-	newBlock := chain.MineBlock(txs)
+	_ = chain.MineBlock(txs)
 	UTXOSet := blockchain.UTXOSet{Blockchain: chain}
+
 	UTXOSet.Reindex()
 
 	log.Println("New block is mined!")
 
 	for _, tx := range txs {
 		txID := hex.EncodeToString(tx.ID)
-		delete(memoryPool, txID)
+		delete(memPool.transactions, txID)
 	}
 
-	for _, node := range KnownNodes {
-		if node != nodeAddress {
-			SendInv(node, "block", [][]byte{newBlock.Hash})
-		}
-	}
+	// for _, node := range KnownNodes {
+	// 	if node != nodeAddress {
+	// 		SendInv(node, "block", [][]byte{newBlock.Hash})
+	// 	}
+	// }
 
-	if len(memoryPool) > 0 {
-		MineTx(chain)
-	}
+	// if len(memPool.transactions) > 0 {
+	// 	MineTx(chain)
+	// }
 }
 
 func (h *HTTP) HandleInv(payload interface{}) {
@@ -392,7 +393,7 @@ func (h *HTTP) HandleInv(payload interface{}) {
 	if inventory.Type == "tx" {
 		txID := inventory.Items[0]
 
-		if memoryPool[hex.EncodeToString(txID)] == nil {
+		if memPool.transactions[hex.EncodeToString(txID)] == nil {
 			SendGetData(inventory.AddrFrom, "tx", txID)
 		}
 	}

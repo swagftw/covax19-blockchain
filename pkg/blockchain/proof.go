@@ -14,7 +14,7 @@ import (
 // condition is we create a difficulty level which is the number of leading zeros required at in the hash
 // for that we find a hash with bruteforce using a nonce which is a random number including other data in block.
 
-const DIFFICULTY = 16
+const DIFFICULTY = 14
 
 type ProofOfWork struct {
 	Block  *Block

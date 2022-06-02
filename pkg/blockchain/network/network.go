@@ -13,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/dgraph-io/badger"
@@ -35,8 +36,17 @@ var (
 	KnownNodes      = []string{
 		"localhost:8080", // main node for chain operations
 	}
-	memoryPool = make(map[string]*blockchain2.Transaction)
 )
+
+type memoryPool struct {
+	transactions map[string]*blockchain2.Transaction
+	mutex        *sync.Mutex
+}
+
+var memPool = &memoryPool{
+	transactions: make(map[string]*blockchain2.Transaction),
+	mutex:        &sync.Mutex{},
+}
 
 type command string
 
@@ -106,7 +116,7 @@ type Send struct {
 // func ExtractCommand(request []byte) (command string) {
 //	command = string(request[:commandLength])
 //	return
-//}
+// }
 
 func SendData(addr string, request CmdRequest) {
 	conn, err := net.Dial(protocol, addr)
@@ -311,7 +321,7 @@ func GetMainNodeID() string {
 //	}
 //
 //	return bytes[:]
-//}
+// }
 
 // func BytesToCmd(bytes []byte) string {
 //	var cmd []byte
@@ -323,7 +333,7 @@ func GetMainNodeID() string {
 //	}
 //
 //	return log.Sprintf("%s", cmd)
-//}
+// }
 
 // func GobEncode(data interface{}) []byte {
 //	var buff bytes.Buffer
@@ -335,4 +345,4 @@ func GetMainNodeID() string {
 //	}
 //
 //	return buff.Bytes()
-//}
+// }

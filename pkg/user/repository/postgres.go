@@ -17,6 +17,30 @@ type repo struct {
 	db *gorm.DB
 }
 
+func (r repo) GetUserByWallet(ctx context.Context, wallet string) (*types.User, error) {
+	db := storage.GetGormDBFromContext(ctx, r.db)
+
+	resp := new(types.User)
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		usr := new(user.User)
+
+		err := db.Model(usr).Where("wallet_address = ?", wallet).First(usr).Error
+		if err == gorm.ErrRecordNotFound {
+			return types.ErrUserNotFound
+		}
+
+		err = copier.Copy(resp, usr)
+		if err != nil {
+			return types.ErrCopy
+		}
+
+		return nil
+	})
+
+	return resp, err
+}
+
 func (r repo) GetUserPassword(ctx context.Context, id uint) (string, error) {
 	db := storage.GetGormDBFromContext(ctx, r.db)
 

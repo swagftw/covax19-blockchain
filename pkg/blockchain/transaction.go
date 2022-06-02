@@ -9,11 +9,12 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	"github.com/swagftw/covax19-blockchain/pkg/wallet"
 	"log"
 	"math/big"
 	"strings"
 	"time"
+
+	"github.com/swagftw/covax19-blockchain/pkg/wallet"
 )
 
 // Transaction represents a transaction
@@ -46,15 +47,17 @@ func (tx *Transaction) Hash() []byte {
 	return hash[:]
 }
 
-func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) (*Transaction, error) {
+func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet, skipBalanceCheck bool) (*Transaction, error) {
 	inputs := make([]TxInput, 0)
 	outputs := make([]TxOutput, 0)
 
 	pubKeyHash := wallet.PublicKeyToHash(w.PublicKey)
 	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
 
-	if acc < amount {
-		log.Panic("Error: not enough funds")
+	if !skipBalanceCheck {
+		if acc < amount {
+			log.Panic("Error: not enough funds")
+		}
 	}
 
 	for txid, outs := range validOutputs {
@@ -67,13 +70,16 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet) (*Tr
 		}
 	}
 
-	from := fmt.Sprintf("%s", w.Address())
+	from := string(w.Address())
 
 	outputs = append(outputs, *NewTXOutput(amount, to))
 
-	if acc > amount {
-		outputs = append(outputs, *NewTXOutput(acc-amount, from))
+	newAmount := acc
+	if !skipBalanceCheck {
+		newAmount = acc - amount
 	}
+
+	outputs = append(outputs, *NewTXOutput(newAmount, from))
 
 	tx := Transaction{
 		ID:       nil,

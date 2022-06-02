@@ -20,6 +20,19 @@ type service struct {
 	repo Repository
 }
 
+func (s service) GetUserByWallet(ctx context.Context, wallet string) (*types.User, error) {
+	user, err := s.repo.GetUserByWallet(ctx, wallet)
+	if err != nil {
+		if err == types.ErrUserNotFound {
+			return nil, fault.New(errUserNotFound, "user not found", http.StatusNotFound)
+		}
+
+		return nil, err
+	}
+
+	return user, nil
+}
+
 // CheckPassword checks if user exists and password is correct.
 func (s service) CheckPassword(ctx context.Context, userID uint, password string) (bool, error) {
 	pass, err := s.repo.GetUserPassword(ctx, userID)
