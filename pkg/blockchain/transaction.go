@@ -17,7 +17,6 @@ import (
 	"github.com/swagftw/covax19-blockchain/pkg/wallet"
 )
 
-// Transaction represents a transaction
 type Transaction struct {
 	ID       []byte
 	Inputs   []TxInput
@@ -25,38 +24,66 @@ type Transaction struct {
 	LockTime int64
 }
 
-func (tx *Transaction) Serialize() []byte {
+func (tx *Transaction) Hash() []byte {
+	var hash [32]byte
+
+	txCopy := *tx
+	txCopy.ID = []byte{}
+
+	hash = sha256.Sum256(txCopy.Serialize())
+
+	return hash[:]
+}
+
+func (tx Transaction) Serialize() []byte {
 	var encoded bytes.Buffer
 
 	enc := gob.NewEncoder(&encoded)
-
-	if err := enc.Encode(tx); err != nil {
+	err := enc.Encode(tx)
+	if err != nil {
 		log.Panic(err)
 	}
 
 	return encoded.Bytes()
 }
 
-func (tx *Transaction) Hash() []byte {
-	var hash [32]byte
+func DeserializeTransaction(data []byte) Transaction {
+	var transaction Transaction
 
-	txCopy := *tx
-	txCopy.ID = []byte{}
-	hash = sha256.Sum256(txCopy.Serialize())
-
-	return hash[:]
+	decoder := gob.NewDecoder(bytes.NewReader(data))
+	err := decoder.Decode(&transaction)
+	Handle(err)
+	return transaction
 }
 
-func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet, skipBalanceCheck bool) (*Transaction, error) {
-	inputs := make([]TxInput, 0)
-	outputs := make([]TxOutput, 0)
+func CoinbaseTx(to, data string) *Transaction {
+	if data == "" {
+		randData := make([]byte, 24)
+		_, err := rand.Read(randData)
+		Handle(err)
+		data = fmt.Sprintf("%x", randData)
+	}
+
+	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
+	txout := NewTXOutput(20, to)
+
+	tx := Transaction{Inputs: []TxInput{txin}, Outputs: []TxOutput{*txout}}
+	tx.ID = tx.Hash()
+
+	return &tx
+}
+
+func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet, skipBalanceCheck bool) *Transaction {
+	var inputs []TxInput
+
+	var outputs []TxOutput
 
 	pubKeyHash := wallet.PublicKeyToHash(w.PublicKey)
 	acc, validOutputs := UTXO.FindSpendableOutputs(pubKeyHash, amount)
 
 	if !skipBalanceCheck {
 		if acc < amount {
-			log.Panic("Error: not enough funds")
+			log.Panic("ERROR: Not enough funds")
 		}
 	}
 
@@ -70,49 +97,27 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet, skip
 		}
 	}
 
-	from := string(w.Address())
+	from := fmt.Sprintf("%s", w.Address())
 
 	outputs = append(outputs, *NewTXOutput(amount, to))
 
-	newAmount := acc
-	if !skipBalanceCheck {
-		newAmount = acc - amount
+	if skipBalanceCheck {
+		outputs = append(outputs, *NewTXOutput(0, from))
+	} else if acc > amount {
+		outputs = append(outputs, *NewTXOutput(acc-amount, from))
 	}
 
-	outputs = append(outputs, *NewTXOutput(newAmount, from))
-
 	tx := Transaction{
-		ID:       nil,
-		Inputs:   inputs,
-		Outputs:  outputs,
-		LockTime: time.Now().Unix(),
+		ID:      nil,
+		Inputs:  inputs,
+		Outputs: outputs,
 	}
 	tx.ID = tx.Hash()
 	UTXO.Blockchain.SignTransaction(&tx, w.PrivateKey)
 
-	return &tx, nil
-}
-
-// CoinbaseTx creates a new coinbase transaction
-func CoinbaseTx(to, data string) *Transaction {
-	if data == "" {
-		randData := make([]byte, 24)
-		_, err := rand.Read(randData)
-		Handle(err)
-
-		data = fmt.Sprintf("%x", randData)
-	}
-
-	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
-	txout := NewTXOutput(20, to)
-
-	tx := Transaction{Inputs: []TxInput{txin}, Outputs: []TxOutput{*txout}, LockTime: time.Now().Unix()}
-	tx.ID = tx.Hash()
-
 	return &tx
 }
 
-// IsCoinbase checks if a transaction is a coinbase
 func (tx *Transaction) IsCoinbase() bool {
 	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].Out == -1
 }
@@ -133,18 +138,19 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 	for inId, in := range txCopy.Inputs {
 		prevTX := prevTXs[hex.EncodeToString(in.ID)]
 		txCopy.Inputs[inId].Signature = nil
-		txCopy.Inputs[inId].PublicKey = prevTX.Outputs[in.Out].PubKeyHash
+		txCopy.Inputs[inId].PubKey = prevTX.Outputs[in.Out].PubKeyHash
 
 		dataToSign := fmt.Sprintf("%x\n", txCopy)
 
 		r, s, err := ecdsa.Sign(rand.Reader, &privKey, []byte(dataToSign))
 		Handle(err)
-
 		signature := append(r.Bytes(), s.Bytes()...)
 
 		tx.Inputs[inId].Signature = signature
-		txCopy.Inputs[inId].PublicKey = nil
+		txCopy.Inputs[inId].PubKey = nil
 	}
+
+	tx.LockTime = time.Now().Unix()
 }
 
 func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
@@ -161,10 +167,10 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	txCopy := tx.TrimmedCopy()
 	curve := elliptic.P256()
 
-	for inID, in := range tx.Inputs {
+	for inId, in := range tx.Inputs {
 		prevTx := prevTXs[hex.EncodeToString(in.ID)]
-		txCopy.Inputs[inID].Signature = nil
-		txCopy.Inputs[inID].PublicKey = prevTx.Outputs[in.Out].PubKeyHash
+		txCopy.Inputs[inId].Signature = nil
+		txCopy.Inputs[inId].PubKey = prevTx.Outputs[in.Out].PubKeyHash
 
 		r := big.Int{}
 		s := big.Int{}
@@ -175,27 +181,25 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 
 		x := big.Int{}
 		y := big.Int{}
-		keyLen := len(in.PublicKey)
-		x.SetBytes(in.PublicKey[:(keyLen / 2)])
-		y.SetBytes(in.PublicKey[(keyLen / 2):])
+		keyLen := len(in.PubKey)
+		x.SetBytes(in.PubKey[:(keyLen / 2)])
+		y.SetBytes(in.PubKey[(keyLen / 2):])
 
 		dataToVerify := fmt.Sprintf("%x\n", txCopy)
 
 		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-
-		if !ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) {
+		if ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) == false {
 			return false
 		}
-
-		txCopy.Inputs[inID].PublicKey = nil
+		txCopy.Inputs[inId].PubKey = nil
 	}
 
 	return true
 }
 
 func (tx *Transaction) TrimmedCopy() Transaction {
-	inputs := make([]TxInput, 0)
-	outputs := make([]TxOutput, 0)
+	var inputs []TxInput
+	var outputs []TxOutput
 
 	for _, in := range tx.Inputs {
 		inputs = append(inputs, TxInput{in.ID, in.Out, nil, nil})
@@ -215,7 +219,7 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 }
 
 func (tx Transaction) String() string {
-	lines := make([]string, 0)
+	var lines []string
 
 	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
 	for i, input := range tx.Inputs {
@@ -223,7 +227,7 @@ func (tx Transaction) String() string {
 		lines = append(lines, fmt.Sprintf("       TXID:     %x", input.ID))
 		lines = append(lines, fmt.Sprintf("       Out:       %d", input.Out))
 		lines = append(lines, fmt.Sprintf("       Signature: %x", input.Signature))
-		lines = append(lines, fmt.Sprintf("       PubKey:    %x", input.PublicKey))
+		lines = append(lines, fmt.Sprintf("       PubKey:    %x", input.PubKey))
 	}
 
 	for i, output := range tx.Outputs {

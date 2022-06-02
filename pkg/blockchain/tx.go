@@ -3,7 +3,8 @@ package blockchain
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/swagftw/covax19-blockchain/pkg/wallet"
+
+	wallet2 "github.com/swagftw/covax19-blockchain/pkg/wallet"
 )
 
 type TxOutput struct {
@@ -19,23 +20,23 @@ type TxInput struct {
 	ID        []byte
 	Out       int
 	Signature []byte
-	PublicKey []byte
+	PubKey    []byte
 }
 
-func (outs TxOutputs) Serialize() []byte {
-	var buff bytes.Buffer
-	enc := gob.NewEncoder(&buff)
-	err := enc.Encode(outs)
-	Handle(err)
-	return buff.Bytes()
+func (in *TxInput) UsesKey(pubKeyHash []byte) bool {
+	lockingHash := wallet2.PublicKeyToHash(in.PubKey)
+
+	return bytes.Compare(lockingHash, pubKeyHash) == 0
 }
 
-func DeserializeOutputs(data []byte) TxOutputs {
-	var outputs TxOutputs
-	dec := gob.NewDecoder(bytes.NewReader(data))
-	err := dec.Decode(&outputs)
-	Handle(err)
-	return outputs
+func (out *TxOutput) Lock(address []byte) {
+	pubKeyHash := wallet2.Base58Decode(address)
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
+	out.PubKeyHash = pubKeyHash
+}
+
+func (out *TxOutput) IsLockedWithKey(pubKeyHash []byte) bool {
+	return bytes.Compare(out.PubKeyHash, pubKeyHash) == 0
 }
 
 func NewTXOutput(value int, address string) *TxOutput {
@@ -45,17 +46,18 @@ func NewTXOutput(value int, address string) *TxOutput {
 	return txo
 }
 
-func (in *TxInput) UsesKey(pubKeyHash []byte) bool {
-	lockingHash := wallet.PublicKeyToHash(in.PublicKey)
-	return bytes.Compare(lockingHash, pubKeyHash) == 0
+func (outs TxOutputs) Serialize() []byte {
+	var buffer bytes.Buffer
+	encode := gob.NewEncoder(&buffer)
+	err := encode.Encode(outs)
+	Handle(err)
+	return buffer.Bytes()
 }
 
-func (out *TxOutput) Lock(address []byte) {
-	pubKeyHash := wallet.Base58Decode(address)
-	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
-	out.PubKeyHash = pubKeyHash
-}
-
-func (out *TxOutput) IsLockedWithKey(pubKeyHash []byte) bool {
-	return bytes.Compare(out.PubKeyHash, pubKeyHash) == 0
+func DeserializeOutputs(data []byte) TxOutputs {
+	var outputs TxOutputs
+	decode := gob.NewDecoder(bytes.NewReader(data))
+	err := decode.Decode(&outputs)
+	Handle(err)
+	return outputs
 }

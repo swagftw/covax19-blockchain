@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/swagftw/covax19-blockchain/types"
-
 	"github.com/pkg/errors"
 
 	"github.com/golang-jwt/jwt"
+
+	"github.com/swagftw/covax19-blockchain/types"
 )
 
 type Service struct {

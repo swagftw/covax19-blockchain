@@ -126,12 +126,7 @@ func (h *httpHandler) send(ctx echo.Context) error {
 
 // getBlockchain returns the blockchain.
 func (h *httpHandler) getBlockchain(ctx echo.Context) error {
-	node := ctx.QueryParam("nodeID")
-	if node == "" {
-		return errors.New("nodeID is required")
-	}
-
-	endpoint := fmt.Sprintf("http://localhost:%s/v1/chain", node)
+	endpoint := fmt.Sprintf("http://%s/v1/chain", network.KnownNodes[0])
 
 	resp, err := server.SendRequest(http.MethodGet, endpoint, nil)
 	if err != nil {

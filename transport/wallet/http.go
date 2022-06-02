@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"github.com/labstack/echo/v4"
+
 	"github.com/swagftw/covax19-blockchain/types"
 	"github.com/swagftw/covax19-blockchain/utl/server"
 )

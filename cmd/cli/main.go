@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/swagftw/covax19-blockchain/pkg/cli"
 	"os"
+
+	"github.com/swagftw/covax19-blockchain/cli"
 )
 
 func main() {

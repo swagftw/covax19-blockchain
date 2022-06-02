@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/swagftw/covax19-blockchain/pkg/blockchain/network"
 	"log"
 	"os"
+
+	"github.com/swagftw/covax19-blockchain/pkg/blockchain/network"
 )
 
 func main() {

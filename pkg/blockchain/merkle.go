@@ -1,6 +1,9 @@
 package blockchain
 
-import "crypto/sha256"
+import (
+	"crypto/sha256"
+	"log"
+)
 
 type MerkleTree struct {
 	RootNode *MerkleNode
@@ -13,7 +16,7 @@ type MerkleNode struct {
 }
 
 func NewMerkleNode(left, right *MerkleNode, data []byte) *MerkleNode {
-	node := new(MerkleNode)
+	node := MerkleNode{}
 
 	if left == nil && right == nil {
 		hash := sha256.Sum256(data)
@@ -26,31 +29,37 @@ func NewMerkleNode(left, right *MerkleNode, data []byte) *MerkleNode {
 
 	node.Left = left
 	node.Right = right
-	return node
+
+	return &node
 }
 
 func NewMerkleTree(data [][]byte) *MerkleTree {
 	var nodes []MerkleNode
 
-	if len(data)%2 != 0 {
-		data = append(data, data[len(data)-1])
-	}
-
-	for _, da := range data {
-		node := NewMerkleNode(nil, nil, da)
+	for _, dat := range data {
+		node := NewMerkleNode(nil, nil, dat)
 		nodes = append(nodes, *node)
 	}
 
-	for i := 0; i < len(data)/2; i++ {
-		var newLevel []MerkleNode
-		for j := 0; j < len(nodes); j += 2 {
-			node := NewMerkleNode(&nodes[j], &nodes[j+1], nil)
-			newLevel = append(newLevel, *node)
-		}
-		nodes = newLevel
+	if len(nodes) == 0 {
+		log.Panic("No merkel nodes")
 	}
 
-	tree := &MerkleTree{RootNode: &nodes[0]}
+	for len(nodes) > 1 {
+		if len(nodes)%2 != 0 {
+			nodes = append(nodes, nodes[len(nodes)-1])
+		}
 
-	return tree
+		var level []MerkleNode
+		for i := 0; i < len(nodes); i += 2 {
+			node := NewMerkleNode(&nodes[i], &nodes[i+1], nil)
+			level = append(level, *node)
+		}
+
+		nodes = level
+	}
+
+	tree := MerkleTree{&nodes[0]}
+
+	return &tree
 }
