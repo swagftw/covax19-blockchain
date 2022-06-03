@@ -46,6 +46,8 @@ func ErrorHandler(err error, ctx echo.Context) {
 
 	// Send response
 	if !ctx.Response().Committed {
-		_ = ctx.JSON(httpError.StatusCode, httpError)
+		_ = ctx.JSON(httpError.StatusCode, map[string]interface{}{
+			"error": httpError,
+		})
 	}
 }
