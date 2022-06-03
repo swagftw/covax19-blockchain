@@ -67,6 +67,7 @@ func (s Service) GenerateAccessToken(usr *types.User) (string, error) {
 		"aadhaarNumber": usr.AadhaarNumber,
 		"type":          usr.Type,
 		"walletAddress": usr.WalletAddress,
+		"verified":      usr.Verified,
 		"exp":           time.Now().Add(s.ttl).Unix(),
 	}).SignedString(s.key)
 	if err != nil {
