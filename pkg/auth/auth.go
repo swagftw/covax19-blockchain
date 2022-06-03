@@ -41,6 +41,7 @@ func (s service) SignUp(ctx context.Context, request *types.SignUpRequest) (*typ
 		// else create user and token.
 		if usr == nil {
 			dto := &types.CreateUserRequestDto{
+				Name:          request.Name,
 				Email:         request.Email,
 				Password:      request.Password,
 				AadhaarNumber: request.AadhaarNumber,
