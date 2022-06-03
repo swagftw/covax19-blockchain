@@ -61,13 +61,13 @@ func (s Service) ParseToken(authHeader string) (*jwt.Token, error) {
 // GenerateAccessToken generates new JWT token and populates it with user data.
 func (s Service) GenerateAccessToken(usr *types.User) (string, error) {
 	tokenString, err := jwt.NewWithClaims(s.algo, jwt.MapClaims{
-		"id":      usr.ID,
-		"name":    usr.Name,
-		"email":   usr.Email,
-		"aadhaar": usr.AadhaarNumber,
-		"type":    usr.Type,
-		"wallet":  usr.WalletAddress,
-		"exp":     time.Now().Add(s.ttl).Unix(),
+		"id":            usr.ID,
+		"name":          usr.Name,
+		"email":         usr.Email,
+		"aadhaarNumber": usr.AadhaarNumber,
+		"type":          usr.Type,
+		"walletAddress": usr.WalletAddress,
+		"exp":           time.Now().Add(s.ttl).Unix(),
 	}).SignedString(s.key)
 	if err != nil {
 		return "", err
