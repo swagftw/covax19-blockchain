@@ -16,8 +16,9 @@ var ErrUserAlreadyExists = errors.New("user already exists")
 type (
 	// UserService is an interface for interacting with the user service.
 	UserService interface {
-		GetUser(ctx context.Context, id string) (*User, error)
-		GetUsers(ctx context.Context) ([]*User, error)
+		GetUser(ctx context.Context, id uint) (*User, error)
+		GetUsers(ctx context.Context, userType string) ([]*User, error)
+		GetUsersByAddresses(ctx context.Context, addresses []string) ([]*User, error)
 		GetUserByEmail(ctx context.Context, email string) (*User, error)
 		GetUserByWallet(ctx context.Context, wallet string) (*User, error)
 		CreateUser(ctx context.Context, user *CreateUserRequestDto) (*User, error)
@@ -62,3 +63,5 @@ const (
 	UserTypeMedicalInstitution UserType = "medical_institution"
 	UserTypeCitizen            UserType = "citizen"
 )
+
+var ValidUserTypes = []UserType{UserTypeManufacturer, UserTypeGovernment, UserTypeMedicalInstitution, UserTypeCitizen}

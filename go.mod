@@ -10,6 +10,7 @@ require (
 	github.com/mr-tron/base58 v1.2.0
 	github.com/pkg/errors v0.8.1
 	github.com/stretchr/testify v1.7.0
+	github.com/thoas/go-funk v0.9.2
 	github.com/vrecan/death/v3 v3.0.3
 	golang.org/x/crypto v0.0.0-20220518034528-6f7dac969898
 	gorm.io/driver/postgres v1.3.6

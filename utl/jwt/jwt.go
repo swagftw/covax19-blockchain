@@ -32,7 +32,7 @@ func New() (Service, error) {
 	return Service{
 		key:    []byte("abcd1234"),
 		algo:   signingMethod,
-		ttl:    time.Duration(15) * time.Minute,
+		ttl:    time.Duration(365) * time.Hour * 24,
 		hasher: sha256.New(),
 	}, nil
 }

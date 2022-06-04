@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/swagftw/covax19-blockchain/pkg/auth"
+	"github.com/swagftw/covax19-blockchain/pkg/transaction"
 	"github.com/swagftw/covax19-blockchain/pkg/user"
 	"github.com/swagftw/covax19-blockchain/utl/storage"
 )
@@ -33,6 +34,17 @@ func main() {
 	}
 
 	err = gdb.AutoMigrate(&user.User{}, &user.Password{})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// create transaction schema.
+	err = gdb.Exec("CREATE SCHEMA IF NOT EXISTS transactions;").Error
+	if err != nil {
+		log.Panic(err)
+	}
+
+	err = gdb.AutoMigrate(&transaction.Transaction{})
 	if err != nil {
 		log.Panic(err)
 	}

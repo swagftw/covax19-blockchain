@@ -17,12 +17,12 @@ type httpHandler struct {
 }
 
 // NewHTTP initializes all the handlers.
-func NewHTTP(v1Group *echo.Group, userService types.UserService) {
+func NewHTTP(v1Group *echo.Group, userService types.UserService, jwtMiddleware echo.MiddlewareFunc) {
 	h := &httpHandler{usrService: userService}
 	v1Group.GET("/ping", h.ping)
 
 	// wallet related handlers
-	chainGroup := v1Group.Group("/chain")
+	chainGroup := v1Group.Group("/chain", jwtMiddleware)
 	chainGroup.POST("/wallets", h.createWallet)
 	chainGroup.GET("/wallets", h.getWallets)
 	chainGroup.GET("/wallets/balance/:address", h.getBalance)
@@ -30,10 +30,6 @@ func NewHTTP(v1Group *echo.Group, userService types.UserService) {
 	// blockchain related handlers
 	chainGroup.POST("/:address", h.createBlockchain)
 	chainGroup.GET("", h.getBlockchain)
-
-	// transaction related handlers
-	transactionGroup := v1Group.Group("/transactions")
-	transactionGroup.POST("/send", h.send)
 }
 
 func (h *httpHandler) getBalance(ctx echo.Context) error {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/thoas/go-funk"
+
 	"github.com/swagftw/covax19-blockchain/pkg/wallet"
 	"github.com/swagftw/covax19-blockchain/types"
 	"github.com/swagftw/covax19-blockchain/utl/server/fault"
@@ -18,6 +20,15 @@ var (
 type service struct {
 	tx   transaction.Transaction
 	repo Repository
+}
+
+func (s service) GetUsersByAddresses(ctx context.Context, addresses []string) ([]*types.User, error) {
+	users, err := s.repo.GetUsersByAddresses(ctx, addresses)
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
 
 func (s service) GetUserByWallet(ctx context.Context, wallet string) (*types.User, error) {
@@ -124,7 +135,7 @@ func (s service) createCitizen(ctx context.Context, dto *types.CreateUserRequest
 }
 
 // GetUser returns user by id.
-func (s service) GetUser(ctx context.Context, id string) (*types.User, error) {
+func (s service) GetUser(ctx context.Context, id uint) (*types.User, error) {
 	user, err := s.repo.GetUser(ctx, id)
 	if err != nil {
 		return nil, err
@@ -134,9 +145,17 @@ func (s service) GetUser(ctx context.Context, id string) (*types.User, error) {
 }
 
 // GetUsers returns all user.
-func (s service) GetUsers(ctx context.Context) ([]*types.User, error) {
-	// TODO implement me
-	panic("implement me")
+func (s service) GetUsers(ctx context.Context, userType string) ([]*types.User, error) {
+	if !funk.Contains(types.ValidUserTypes, types.UserType(userType)) {
+		return nil, types.ErrInvalidUserType
+	}
+
+	users, err := s.repo.GetUsersByType(ctx, userType)
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
 
 // UpdateUser updates user.

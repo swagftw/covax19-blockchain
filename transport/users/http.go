@@ -2,6 +2,7 @@ package users
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/labstack/echo/v4"
 
@@ -20,12 +21,13 @@ func NewHTTP(v1Group *echo.Group, userService types.UserService, authMiddleware 
 
 	userGroup := v1Group.Group("/users")
 
-	userGroup.GET("/:type", h.getUsers, authMiddleware)
+	userGroup.GET("/type/:type", h.getUsers, authMiddleware)
 	userGroup.GET("/:id", h.getUser, authMiddleware)
+	userGroup.GET("/wallet/:address", h.getUserByWallet, authMiddleware)
 }
 
 func (h httpHandler) getUsers(c echo.Context) error {
-	users, err := h.userService.GetUsers(server.ToGoContext(c))
+	users, err := h.userService.GetUsers(server.ToGoContext(c), c.Param("type"))
 	if err != nil {
 		return err
 	}
@@ -34,9 +36,20 @@ func (h httpHandler) getUsers(c echo.Context) error {
 }
 
 func (h httpHandler) getUser(c echo.Context) error {
-	id := c.Param("id")
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
-	user, err := h.userService.GetUser(server.ToGoContext(c), id)
+	user, err := h.userService.GetUser(server.ToGoContext(c), uint(id))
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
+
+func (h httpHandler) getUserByWallet(c echo.Context) error {
+	address := c.Param("address")
+
+	user, err := h.userService.GetUserByWallet(server.ToGoContext(c), address)
 	if err != nil {
 		return err
 	}

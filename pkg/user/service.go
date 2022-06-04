@@ -11,11 +11,12 @@ import (
 
 type (
 	Repository interface {
-		GetUser(ctx context.Context, id string) (*types.User, error)
+		GetUser(ctx context.Context, id uint) (*types.User, error)
+		GetUsersByType(ctx context.Context, userType string) ([]*types.User, error)
+		GetUsersByAddresses(ctx context.Context, addresses []string) ([]*types.User, error)
 		GetUserByEmail(ctx context.Context, email string) (*types.User, error)
 		GetUserByWallet(ctx context.Context, wallet string) (*types.User, error)
 		GetUserPassword(ctx context.Context, userID uint) (string, error)
-
 		CreateUser(ctx context.Context, user *types.CreateUserRequestDto) (*types.User, error)
 
 		UpdateUser(ctx context.Context, user *types.UpdateUserRequestDto) (*types.User, error)

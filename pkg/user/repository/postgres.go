@@ -17,6 +17,61 @@ type repo struct {
 	db *gorm.DB
 }
 
+func (r repo) GetUsersByAddresses(ctx context.Context, addresses []string) ([]*types.User, error) {
+	var users []*types.User
+	if len(addresses) == 0 {
+		return users, nil
+	}
+
+	db := storage.GetGormDBFromContext(ctx, r.db)
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		usrs := make([]*user.User, 0)
+		if err := tx.Where("wallet_address IN (?)", addresses).Find(&usrs).Error; err != nil {
+			return err
+		}
+
+		err := copier.Copy(&users, &usrs)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return users, err
+	}
+
+	return users, nil
+}
+
+func (r repo) GetUsersByType(ctx context.Context, userType string) ([]*types.User, error) {
+	db := storage.GetGormDBFromContext(ctx, r.db)
+
+	var users []*types.User
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		usrs := make([]*user.User, 0)
+		err := tx.Where("type = ?", userType).Find(&usrs).Error
+		if err != nil {
+			return err
+		}
+
+		err = copier.Copy(&users, &usrs)
+		if err != nil {
+			return types.ErrCopy
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
 func (r repo) GetUserByWallet(ctx context.Context, wallet string) (*types.User, error) {
 	db := storage.GetGormDBFromContext(ctx, r.db)
 
@@ -156,7 +211,7 @@ func (r repo) CreateUser(ctx context.Context, dto *types.CreateUserRequestDto) (
 	return respUser, nil
 }
 
-func (r repo) GetUser(ctx context.Context, id string) (*types.User, error) {
+func (r repo) GetUser(ctx context.Context, id uint) (*types.User, error) {
 	db := storage.GetGormDBFromContext(ctx, r.db)
 	usr := new(user.User)
 

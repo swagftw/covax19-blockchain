@@ -11,11 +11,13 @@ import (
 
 	"gorm.io/gorm"
 
+	auth2 "github.com/swagftw/covax19-blockchain/pkg/auth"
 	blockchain2 "github.com/swagftw/covax19-blockchain/pkg/blockchain"
 	"github.com/swagftw/covax19-blockchain/pkg/blockchain/network"
 	"github.com/swagftw/covax19-blockchain/pkg/user"
 	wallet2 "github.com/swagftw/covax19-blockchain/pkg/wallet"
 	"github.com/swagftw/covax19-blockchain/types"
+	"github.com/swagftw/covax19-blockchain/utl/jwt"
 	"github.com/swagftw/covax19-blockchain/utl/storage"
 )
 
@@ -319,8 +321,32 @@ func (cli *CommandLine) createGovernmentAccount(password, address string) {
 			PasswordID:    pwd.ID,
 		}
 
-		// create user.
 		err = txn.Model(usr).Create(usr).Error
+		if err != nil {
+			return err
+		}
+
+		u := &types.User{
+			ID:            usr.ID,
+			Name:          usr.Name,
+			Email:         usr.Email,
+			Type:          usr.Type,
+			WalletAddress: usr.WalletAddress,
+			Verified:      usr.Verified,
+		}
+
+		// create user.
+		jwtService, _ := jwt.New()
+		accessToken, _ := jwtService.GenerateAccessToken(u)
+		refreshToken := jwtService.GenerateRefreshToken(accessToken)
+
+		auth := &auth2.Tokens{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			Identifier:   u.Email,
+		}
+
+		err = txn.Save(auth).Error
 		if err != nil {
 			return err
 		}
