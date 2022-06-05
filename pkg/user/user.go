@@ -97,6 +97,7 @@ func (s service) GetUserByEmail(ctx context.Context, email string) (*types.User,
 // createManufacturer creates a new manufacturer.
 func (s service) createManufacturer(ctx context.Context, dto *types.CreateUserRequestDto) (*types.User, error) {
 	dto.Type = types.UserTypeManufacturer
+	dto.Verified = true
 	dto.WalletAddress = wallet.GenerateNewWallet()
 
 	user, err := s.repo.CreateUser(ctx, dto)

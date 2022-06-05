@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/swagftw/covax19-blockchain/pkg/wallet"
+	"github.com/swagftw/covax19-blockchain/types"
 )
 
 type Transaction struct {
@@ -73,7 +74,7 @@ func CoinbaseTx(to, data string) *Transaction {
 	return &tx
 }
 
-func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet, skipBalanceCheck bool) *Transaction {
+func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet, skipBalanceCheck bool) (*Transaction, error) {
 	var inputs []TxInput
 
 	var outputs []TxOutput
@@ -83,7 +84,7 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet, skip
 
 	if !skipBalanceCheck {
 		if acc < amount {
-			log.Panic("ERROR: Not enough funds")
+			return nil, types.ErrNotEnoughFunds
 		}
 	}
 
@@ -115,7 +116,7 @@ func NewTransaction(w *wallet.Wallet, to string, amount int, UTXO *UTXOSet, skip
 	tx.ID = tx.Hash()
 	UTXO.Blockchain.SignTransaction(&tx, w.PrivateKey)
 
-	return &tx
+	return &tx, nil
 }
 
 func (tx *Transaction) IsCoinbase() bool {

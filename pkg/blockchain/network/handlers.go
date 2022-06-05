@@ -11,6 +11,7 @@ import (
 	blockchain2 "github.com/swagftw/covax19-blockchain/pkg/blockchain"
 	wallet2 "github.com/swagftw/covax19-blockchain/pkg/wallet"
 	"github.com/swagftw/covax19-blockchain/types"
+	"github.com/swagftw/covax19-blockchain/utl/server/fault"
 )
 
 func (h HTTP) createWallet(c echo.Context) error {
@@ -80,9 +81,17 @@ func (h HTTP) handleSend(c echo.Context) error {
 	}
 
 	wallet := wallets.GetWallet(sendDTO.From)
+
 	wallet2.DeleteWalletLock()
 
-	tx := blockchain2.NewTransaction(wallet, sendDTO.To, sendDTO.Amount, &UTXOSet, true)
+	tx, err := blockchain2.NewTransaction(wallet, sendDTO.To, sendDTO.Amount, &UTXOSet, sendDTO.SkipBalanceCheck)
+	if err != nil {
+		if err == types.ErrNotEnoughFunds {
+			return fault.New("ERROR_NOT_ENOUGH_FUNDS", err.Error(), http.StatusBadRequest)
+		}
+
+		return err
+	}
 
 	// cbTx := blockchain2.CoinbaseTx(sendDTO.From, "")
 	go func(UTXOSet blockchain2.UTXOSet, tx *blockchain2.Transaction) {

@@ -156,7 +156,7 @@ func (cli *CommandLine) Send(from, to string, amount int, mineNow bool) {
 	wallet2.DeleteWalletLock()
 	wallet := wallets.GetWallet(from)
 
-	tx := blockchain2.NewTransaction(wallet, to, amount, &UTXOSet, true)
+	tx, _ := blockchain2.NewTransaction(wallet, to, amount, &UTXOSet, true)
 
 	if mineNow {
 		cbTx := blockchain2.CoinbaseTx(from, "")

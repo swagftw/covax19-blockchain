@@ -34,7 +34,7 @@ type (
 		WalletAddress string   `json:"walletAddress,omitempty"`
 		Password      string   `json:"password,omitempty"`
 		Type          UserType `json:"type,omitempty"`
-		Verified      bool     `json:"verified,omitempty"`
+		Verified      bool     `json:"verified"`
 	}
 
 	UpdateUserRequestDto struct {
@@ -50,7 +50,7 @@ type (
 		Type          UserType `json:"type,omitempty"`
 		AadhaarNumber string   `json:"aadhaarNumber,omitempty"`
 		WalletAddress string   `json:"walletAddress,omitempty"`
-		Verified      bool     `json:"verified,omitempty"`
+		Verified      bool     `json:"verified"`
 	}
 
 	// UserType represents a user type.

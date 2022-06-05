@@ -8,6 +8,7 @@ import (
 
 var ErrSavingTransaction = errors.New("error saving transaction")
 var ErrGettingTransactions = errors.New("error getting transactions")
+var ErrNotEnoughFunds = errors.New("not enough funds")
 
 type (
 	// Service represents transaction service.
