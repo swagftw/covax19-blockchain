@@ -16,6 +16,7 @@ type (
 		Send(ctx context.Context, dto *SendTokens) error
 		SaveTransaction(ctx context.Context, transaction *Transaction) (*Transaction, error)
 		GetTransaction(ctx context.Context, address string) ([]*Transaction, error)
+		GetTotalVaccinatedCitizens(ctx context.Context) (int, error)
 	}
 
 	// Transaction represents transaction.

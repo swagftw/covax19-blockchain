@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -17,6 +18,32 @@ type service struct {
 	repo       Repository
 	tx         tx.Transaction
 	usrService types.UserService
+}
+
+func (s service) GetTotalVaccinatedCitizens(ctx context.Context) (int, error) {
+	totalUsers, err := s.usrService.GetUsers(ctx, string(types.UserTypeCitizen))
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, user := range totalUsers {
+		endpoint := fmt.Sprintf("http://%s/v1/chain/wallets/balance/%s", network.KnownNodes[0], user.WalletAddress)
+
+		resp, err := server.SendRequest(http.MethodGet, endpoint, nil)
+
+		balanceMap := make(map[string]int)
+		if err != nil {
+			continue
+		}
+
+		data, _ := json.Marshal(resp)
+		_ = json.Unmarshal(data, &balanceMap)
+
+		count += balanceMap["balance"]
+	}
+
+	return count, nil
 }
 
 func (s service) Send(ctx context.Context, dto *types.SendTokens) error {

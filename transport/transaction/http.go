@@ -21,6 +21,7 @@ func NewHTTP(v1Group *echo.Group, service types.Service, userService types.UserS
 	transactionGroup := v1Group.Group("/transactions", jwtMiddleware)
 	transactionGroup.POST("/send", h.send)
 	transactionGroup.GET("/:address", h.getTransactions)
+	transactionGroup.GET("/vaccines/total", h.getTotalVaccinatedCitizens)
 }
 
 // send creates a transaction.
@@ -48,4 +49,13 @@ func (h *httpHandler) getTransactions(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{"transactions": resp})
+}
+
+func (h *httpHandler) getTotalVaccinatedCitizens(c echo.Context) error {
+	resp, err := h.service.GetTotalVaccinatedCitizens(server.ToGoContext(c))
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"total": resp})
 }
