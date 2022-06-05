@@ -22,17 +22,23 @@ type service struct {
 func (s service) Send(ctx context.Context, dto *types.SendTokens) error {
 	err := s.tx.Run(ctx, func(ctx context.Context) error {
 		// get sender by address
-		user, err := s.usrService.GetUserByWallet(ctx, dto.From)
+		userFrom, err := s.usrService.GetUserByEmail(ctx, dto.From)
 		if err != nil {
 			return err
 		}
 
-		if user.Type == types.UserTypeGovernment {
+		userTo, err := s.usrService.GetUserByEmail(ctx, dto.To)
+		if err != nil {
+			return err
+		}
+
+		if userFrom.Type == types.UserTypeGovernment {
 			dto.SkipBalanceCheck = true
 		}
+
 		txn := &types.Transaction{
-			FromAddress: dto.From,
-			ToAddress:   dto.To,
+			FromAddress: userFrom.WalletAddress,
+			ToAddress:   userTo.WalletAddress,
 			Amount:      dto.Amount,
 		}
 
@@ -42,6 +48,9 @@ func (s service) Send(ctx context.Context, dto *types.SendTokens) error {
 		}
 
 		endpoint := fmt.Sprintf("http://%s/v1/transactions/send", network.KnownNodes[0])
+
+		dto.From = userFrom.WalletAddress
+		dto.To = userTo.WalletAddress
 
 		_, err = server.SendRequest(http.MethodPost, endpoint, dto)
 		if err != nil {

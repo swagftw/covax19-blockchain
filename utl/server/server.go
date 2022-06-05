@@ -11,13 +11,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/pkg/errors"
 
 	"github.com/swagftw/covax19-blockchain/utl/server/fault"
-)
-
-var (
-	ErrBadRequest = errors.New("bad request")
 )
 
 // StartHTTPServer starts the HTTP server.
@@ -70,10 +65,6 @@ func SendRequest(method string, url string, payload interface{}) (interface{}, e
 		}
 	}(response.Body)
 
-	if response.StatusCode >= http.StatusBadRequest {
-		return nil, ErrBadRequest
-	}
-
 	body, err = ioutil.ReadAll(response.Body)
 	if err != nil {
 		log.Println(err)
@@ -82,6 +73,14 @@ func SendRequest(method string, url string, payload interface{}) (interface{}, e
 	}
 
 	log.Println(string(body))
+
+	faultErr := make(map[string]*fault.HTTPError)
+
+	if response.StatusCode >= http.StatusBadRequest {
+		_ = json.Unmarshal(body, &faultErr)
+
+		return nil, faultErr["error"]
+	}
 
 	var respPayload map[string]interface{}
 

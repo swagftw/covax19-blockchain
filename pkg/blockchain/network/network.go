@@ -19,6 +19,7 @@ import (
 	"github.com/vrecan/death/v3"
 
 	blockchain2 "github.com/swagftw/covax19-blockchain/pkg/blockchain"
+	"github.com/swagftw/covax19-blockchain/utl/server/fault"
 )
 
 const (
@@ -457,6 +458,7 @@ func StartServer(nodeID, minerAddress string) {
 	mineAddress = minerAddress
 	ech := echo.New()
 	ech.Use(middleware.Logger(), middleware.Recover())
+	ech.HTTPErrorHandler = fault.ErrorHandler
 
 	chain := blockchain2.ContinueBlockChain()
 	defer chain.Database.Close()
