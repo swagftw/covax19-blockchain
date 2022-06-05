@@ -47,5 +47,5 @@ func (h *httpHandler) getTransactions(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(http.StatusOK, map[string]interface{}{"transactions": resp})
 }

@@ -110,6 +110,7 @@ func (s service) createManufacturer(ctx context.Context, dto *types.CreateUserRe
 // createMedicalInstitution creates new medical institution.
 func (s service) createMedicalInstitution(ctx context.Context, dto *types.CreateUserRequestDto) (*types.User, error) {
 	dto.Type = types.UserTypeMedicalInstitution
+	dto.Verified = true
 	dto.WalletAddress = wallet.GenerateNewWallet()
 
 	user, err := s.repo.CreateUser(ctx, dto)
